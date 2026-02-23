@@ -1,4 +1,4 @@
-# Unofficial TrainerRoad CLI (reverse-engineered)
+# Unofficial TrainerRoad CLI
 
 > Unofficial tool. Not affiliated with or endorsed by TrainerRoad.
 
@@ -191,6 +191,6 @@ Public mode limitations:
 
 ## Notes
 
-- This is an unofficial reverse-engineered client and can break if TrainerRoad changes API contracts.
+- This is an unofficial client and can break if TrainerRoad changes API contracts.
 - This project is not affiliated with or endorsed by TrainerRoad.
 - Treat `.trainerroad/session.json` as sensitive (contains auth cookies).

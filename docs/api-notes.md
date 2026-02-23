@@ -1,4 +1,4 @@
-# TrainerRoad Reverse-Engineering Notes
+# TrainerRoad API Notes
 
 Date captured: 2026-02-23
 
