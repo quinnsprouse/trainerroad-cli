@@ -16,26 +16,33 @@ CLI to fetch TrainerRoad data for your account, including:
 
 ## Install
 
-### From GitHub
+### Run without install (npx)
 
 ```bash
-npx --yes github:quinnsprouse/trainerroad-cli help
+npx --yes trainerroad-cli help
 ```
 
-### Local development
+### Global install
+
+```bash
+npm install -g trainerroad-cli
+trainerroad-cli help
+```
+
+### Local project install
+
+```bash
+npm install trainerroad-cli
+npx trainerroad-cli help
+```
+
+### Local development (from source)
 
 ```bash
 git clone https://github.com/quinnsprouse/trainerroad-cli.git
 cd trainerroad-cli
 npm install
-npm exec --yes trainerroad-cli -- help
-```
-
-### Global
-
-```bash
-npm install -g github:quinnsprouse/trainerroad-cli
-trainerroad-cli help
+npm run help
 ```
 
 ## Quickstart
