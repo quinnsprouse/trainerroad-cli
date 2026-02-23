@@ -1,0 +1,47 @@
+{
+  "name": "trainerroad-cli",
+  "version": "0.1.0",
+  "description": "Unofficial CLI for authenticating with TrainerRoad and querying timeline/workout data",
+  "main": "src/cli.mjs",
+  "bin": {
+    "trainerroad-cli": "src/cli.mjs",
+    "trcli": "src/cli.mjs"
+  },
+  "scripts": {
+    "recon": "node scripts/recon.mjs",
+    "cli": "node src/cli.mjs",
+    "help": "node src/cli.mjs help",
+    "discover": "node src/cli.mjs discover",
+    "capabilities": "node src/cli.mjs capabilities",
+    "login": "node src/cli.mjs login",
+    "whoami": "node src/cli.mjs whoami",
+    "timeline": "node src/cli.mjs timeline",
+    "events": "node src/cli.mjs events",
+    "annotations": "node src/cli.mjs annotations",
+    "levels": "node src/cli.mjs levels",
+    "plan": "node src/cli.mjs plan",
+    "weight-history": "node src/cli.mjs weight-history",
+    "today": "node src/cli.mjs today",
+    "future": "node src/cli.mjs future",
+    "past": "node src/cli.mjs past",
+    "ftp": "node src/cli.mjs ftp",
+    "ftp-prediction": "node src/cli.mjs ftp-prediction",
+    "power-ranking": "node src/cli.mjs power-ranking",
+    "power-records": "node src/cli.mjs power-records",
+    "logout": "node src/cli.mjs logout"
+  },
+  "keywords": [
+    "trainerroad",
+    "cli",
+    "unofficial"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}
