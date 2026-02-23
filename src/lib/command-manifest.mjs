@@ -154,3 +154,175 @@ export const FILTERABLE_COMMANDS = new Set([
   "plan",
   "weight-history",
 ]);
+
+function trimFlagPrefix(flag) {
+  return String(flag ?? "").replace(/^--/, "").trim();
+}
+
+function mergeFlagGroups(...groups) {
+  return new Set(
+    groups
+      .flat()
+      .map((flag) => trimFlagPrefix(flag))
+      .filter(Boolean),
+  );
+}
+
+const SHARED_FLAGS = {
+  help: ["help"],
+  output: ["output"],
+  session: ["session-file"],
+  credentials: ["username", "password"],
+  publicProfile: ["target", "public"],
+  json: ["json"],
+  jsonAndJsonl: ["json", "jsonl"],
+  agentFilters: AGENT_FILTER_OPTIONS.map((option) => trimFlagPrefix(option.flag)),
+  agentOutput: AGENT_OUTPUT_OPTIONS.map((option) => trimFlagPrefix(option.flag)),
+};
+
+export const COMMAND_FLAG_ALLOWLIST = {
+  help: mergeFlagGroups(SHARED_FLAGS.help, SHARED_FLAGS.json),
+  discover: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.json,
+    ["level", "command"],
+  ),
+  capabilities: mergeFlagGroups(SHARED_FLAGS.help, SHARED_FLAGS.output, SHARED_FLAGS.json),
+  login: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["password-stdin", "return-path"],
+  ),
+  whoami: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.json,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+  ),
+  timeline: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.json,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.publicProfile,
+    ["full"],
+  ),
+  events: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+    ["full"],
+  ),
+  annotations: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+    ["full"],
+  ),
+  levels: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+  ),
+  plan: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+    ["view", "full"],
+  ),
+  "weight-history": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+  ),
+  today: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.publicProfile,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+    ["date", "details"],
+  ),
+  future: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.publicProfile,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+    ["days", "from", "to", "details"],
+  ),
+  past: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.publicProfile,
+    SHARED_FLAGS.agentFilters,
+    SHARED_FLAGS.agentOutput,
+    ["days", "limit", "from", "to", "details"],
+  ),
+  ftp: mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.publicProfile,
+    ["history-limit"],
+  ),
+  "ftp-prediction": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.json,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+  ),
+  "power-ranking": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+  ),
+  "power-records": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["start-date", "end-date", "row-type", "indoor-only", "slot", "limit", "full"],
+  ),
+  logout: mergeFlagGroups(SHARED_FLAGS.help, SHARED_FLAGS.output, SHARED_FLAGS.session),
+};

@@ -16,6 +16,7 @@ import {
 import {
   AGENT_FILTER_OPTIONS,
   AGENT_OUTPUT_OPTIONS,
+  COMMAND_FLAG_ALLOWLIST,
   COMMANDS,
   FILTERABLE_COMMANDS,
   GLOBAL_NOTES,
@@ -100,6 +101,25 @@ function getCommandSuggestions(input, max = 3) {
     .map((item) => item.name);
 }
 
+function getFlagSuggestions(input, allowedFlags, max = 3) {
+  const value = String(input ?? "").trim().replace(/^--/, "").toLowerCase();
+  const candidates = Array.isArray(allowedFlags) ? allowedFlags : Array.from(allowedFlags ?? []);
+  if (!value || candidates.length === 0) return [];
+
+  const prefixMatches = candidates.filter((name) => name.startsWith(value));
+  if (prefixMatches.length > 0) return prefixMatches.slice(0, max);
+
+  const ranked = candidates
+    .map((name) => ({ name, distance: levenshteinDistance(value, name) }))
+    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name));
+
+  const threshold = Math.max(2, Math.floor(value.length / 3));
+  return ranked
+    .filter((item) => item.distance <= threshold)
+    .slice(0, max)
+    .map((item) => item.name);
+}
+
 function formatUnknownCommandMessage(input) {
   const suggestions = getCommandSuggestions(input);
   const lines = [`unknown command "${input}" for "trainerroad-cli"`];
@@ -111,6 +131,41 @@ function formatUnknownCommandMessage(input) {
   }
   lines.push("", 'Run "trainerroad-cli help" for available commands.');
   return lines.join("\n");
+}
+
+function formatUnknownFlagMessage(command, unknownFlags, allowedFlags) {
+  const flags = Array.isArray(unknownFlags) ? unknownFlags : [unknownFlags];
+  const normalizedAllowed = Array.from(new Set((allowedFlags ?? []).map((flag) => String(flag)))).sort();
+  const lines = [
+    `unknown flag${flags.length > 1 ? "s" : ""} for "trainerroad-cli ${command}": ${flags.map((flag) => `--${flag}`).join(", ")}`,
+  ];
+
+  for (const flag of flags) {
+    const suggestions = getFlagSuggestions(flag, normalizedAllowed);
+    if (suggestions.length === 1) {
+      lines.push("", `Did you mean --${suggestions[0]} for --${flag}?`);
+    } else if (suggestions.length > 1) {
+      lines.push("", `Suggestions for --${flag}:`);
+      for (const suggestion of suggestions) lines.push(`  --${suggestion}`);
+    }
+  }
+
+  if (normalizedAllowed.length > 0) {
+    lines.push("", `Allowed flags: ${normalizedAllowed.map((flag) => `--${flag}`).join(", ")}`);
+  } else {
+    lines.push("", "Allowed flags: none");
+  }
+
+  const helpCommand = command === "help" ? "trainerroad-cli help" : `trainerroad-cli help ${command}`;
+  lines.push("", `Run "${helpCommand}" for usage.`);
+  return lines.join("\n");
+}
+
+function validateCommandFlags(command, flags) {
+  const allowlist = COMMAND_FLAG_ALLOWLIST[command];
+  if (!allowlist) return { unknownFlags: [] };
+  const unknownFlags = Object.keys(flags).filter((flag) => !allowlist.has(flag));
+  return { unknownFlags, allowlist: Array.from(allowlist) };
 }
 
 function printCommandHelp(command, flags = {}) {
@@ -466,6 +521,17 @@ async function main() {
     process.exit(0);
   }
 
+  if (!COMMANDS[command]) {
+    console.error(formatUnknownCommandMessage(command));
+    process.exit(1);
+  }
+
+  const { unknownFlags, allowlist } = validateCommandFlags(command, flags);
+  if (unknownFlags.length > 0) {
+    console.error(formatUnknownFlagMessage(command, unknownFlags, allowlist));
+    process.exit(1);
+  }
+
   if (command === "help") {
     if (positionals[0]) {
       process.exit(printCommandHelp(positionals[0], flags));
@@ -477,11 +543,6 @@ async function main() {
     }
     printGlobalHelp();
     process.exit(0);
-  }
-
-  if (!COMMANDS[command]) {
-    console.error(formatUnknownCommandMessage(command));
-    process.exit(1);
   }
 
   if (flags.help) {
