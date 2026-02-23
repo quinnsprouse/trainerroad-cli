@@ -1,6 +1,13 @@
+import { normalizeTimeZone, toDateOnlyInTimeZone } from "./timezone.mjs";
+
 function toIsoDate(value) {
-  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-  return new Date(value).toISOString().slice(0, 10);
+  if (typeof value === "string" && value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  return (
+    toDateOnlyInTimeZone(value, normalizeTimeZone(), { assumeUtcForOffsetlessDateTime: true }) ??
+    new Date(value).toISOString().slice(0, 10)
+  );
 }
 
 function toIsoDateFromPlannedRecord(record) {

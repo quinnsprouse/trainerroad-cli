@@ -33,6 +33,16 @@ import { commandPowerRanking, commandPowerRecords } from "./commands/power.mjs";
 import { commandTimeline } from "./commands/timeline.mjs";
 import { commandWeightHistory } from "./commands/weight-history.mjs";
 import { commandFuture, commandPast, commandToday } from "./commands/workouts.mjs";
+import {
+  formatDateTimeInTimeZone,
+  isoDateShiftInTimeZone,
+  normalizeTimeZone,
+  parseApiDateTime,
+  summarizeActivityTimeWindow,
+  toDateOnlyInTimeZone,
+} from "./lib/timezone.mjs";
+
+let ACTIVE_TIME_ZONE = normalizeTimeZone();
 
 function printGlobalHelp() {
   console.log("trainerroad-cli (unofficial)");
@@ -53,6 +63,7 @@ function printGlobalHelp() {
   console.log("Examples:");
   console.log("  node src/cli.mjs login --username quinnsprouse --password-stdin");
   console.log("  node src/cli.mjs future --days 30 --details --json");
+  console.log("  node src/cli.mjs today --tz America/New_York --json");
   console.log("  node src/cli.mjs future --from 2026-03-01 --to 2026-03-31 --min-tss 60 --fields id,title,tss --jsonl");
   console.log("  node src/cli.mjs timeline --target quinnsprouse --public --json");
   console.log("  node src/cli.mjs ftp --target quinnsprouse --public --json");
@@ -179,6 +190,7 @@ function printCommandHelp(command, flags = {}) {
       command,
       summary: def.summary,
       usage: def.usage,
+      timezoneOption: "--tz <IANA timezone> (defaults to TR_TIMEZONE or system timezone)",
       supportsAgentFilters: FILTERABLE_COMMANDS.has(command),
       agentFilterOptions: FILTERABLE_COMMANDS.has(command) ? AGENT_FILTER_OPTIONS : [],
       agentOutputOptions: FILTERABLE_COMMANDS.has(command) ? AGENT_OUTPUT_OPTIONS : [],
@@ -194,6 +206,9 @@ function printCommandHelp(command, flags = {}) {
   console.log("");
   console.log("Usage:");
   for (const line of def.usage) console.log(`  ${line}`);
+  console.log("");
+  console.log("Timezone:");
+  console.log("  --tz <IANA timezone> Override local-day bucketing (defaults: TR_TIMEZONE or system timezone).");
   if (FILTERABLE_COMMANDS.has(command)) {
     console.log("");
     console.log("Agent filters:");
@@ -234,9 +249,7 @@ function parseArgs(argv) {
 }
 
 function isoDateShift(days) {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+  return isoDateShiftInTimeZone(days, ACTIVE_TIME_ZONE);
 }
 
 function toIsoDateFromPlanned(item) {
@@ -244,8 +257,26 @@ function toIsoDateFromPlanned(item) {
 }
 
 function toIsoDate(value) {
-  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-  return new Date(value).toISOString().slice(0, 10);
+  if (typeof value === "string" && value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  return (
+    toDateOnlyInTimeZone(value, ACTIVE_TIME_ZONE, { assumeUtcForOffsetlessDateTime: true }) ??
+    new Date(value).toISOString().slice(0, 10)
+  );
+}
+
+function formatDateTime(value) {
+  return (
+    formatDateTimeInTimeZone(value, ACTIVE_TIME_ZONE, { assumeUtcForOffsetlessDateTime: true }) ??
+    String(value ?? "")
+  );
+}
+
+function summarizeActivityTime(started, durationInSeconds) {
+  return summarizeActivityTimeWindow(started, durationInSeconds, ACTIVE_TIME_ZONE, {
+    assumeUtcForOffsetlessDateTime: true,
+  });
 }
 
 function normalizeDateOnlyInput(value, fallback) {
@@ -292,8 +323,10 @@ function normalizeFtpHistory(raw) {
       const valueRaw = item?.value ?? item?.Value ?? null;
       const value = Number(valueRaw);
       if (!dateRaw || !Number.isFinite(value)) return null;
+      const parsedDate = parseApiDateTime(dateRaw, { assumeUtcForOffsetlessDateTime: true });
+      if (!parsedDate) return null;
       return {
-        date: new Date(dateRaw).toISOString(),
+        date: parsedDate.toISOString(),
         dateOnly: toIsoDate(dateRaw),
         value,
       };
@@ -328,9 +361,11 @@ function normalizeFitnessThresholds(raw) {
       const valueRaw = item?.value ?? item?.Value ?? null;
       const value = Number(valueRaw);
       if (!dateRaw || !Number.isFinite(value)) return null;
+      const parsedDate = parseApiDateTime(dateRaw, { assumeUtcForOffsetlessDateTime: true });
+      if (!parsedDate) return null;
       return {
         id: item?.id ?? item?.Id ?? null,
-        date: new Date(dateRaw).toISOString(),
+        date: parsedDate.toISOString(),
         dateOnly: toIsoDate(dateRaw),
         value,
         isApplied: Boolean(item?.isApplied ?? item?.IsApplied),
@@ -397,9 +432,21 @@ async function readPasswordFromStdin() {
   return Buffer.concat(chunks).toString("utf8").trim();
 }
 
+function withTimeZoneMeta(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  if (payload.timeZone != null) return payload;
+  return { ...payload, timeZone: ACTIVE_TIME_ZONE };
+}
+
 async function writeOutput(payload, flags, textRenderer = null) {
+  const payloadWithTimeZone = withTimeZoneMeta(payload);
+
   if (flags.jsonl) {
-    const records = Array.isArray(payload?.records) ? payload.records : Array.isArray(payload) ? payload : [];
+    const records = Array.isArray(payloadWithTimeZone?.records)
+      ? payloadWithTimeZone.records
+      : Array.isArray(payloadWithTimeZone)
+        ? payloadWithTimeZone
+        : [];
     const content = records.map((item) => JSON.stringify(item)).join("\n");
     if (flags.output) {
       await fs.writeFile(flags.output, `${content}${content ? "\n" : ""}`, "utf8");
@@ -410,9 +457,11 @@ async function writeOutput(payload, flags, textRenderer = null) {
     return;
   }
 
-  if (flags.json || typeof payload !== "string") {
+  if (flags.json || typeof payloadWithTimeZone !== "string") {
     const content =
-      typeof payload === "string" ? payload : `${JSON.stringify(payload, null, 2)}\n`;
+      typeof payloadWithTimeZone === "string"
+        ? payloadWithTimeZone
+        : `${JSON.stringify(payloadWithTimeZone, null, 2)}\n`;
     if (flags.output) {
       await fs.writeFile(flags.output, content, "utf8");
       console.log(`Wrote JSON to ${flags.output}`);
@@ -422,7 +471,7 @@ async function writeOutput(payload, flags, textRenderer = null) {
     return;
   }
 
-  const text = textRenderer ? textRenderer(payload) : String(payload);
+  const text = textRenderer ? textRenderer(payloadWithTimeZone) : String(payloadWithTimeZone);
   if (flags.output) {
     await fs.writeFile(flags.output, `${text}\n`, "utf8");
     console.log(`Wrote text to ${flags.output}`);
@@ -532,6 +581,9 @@ async function main() {
     process.exit(1);
   }
 
+  ACTIVE_TIME_ZONE = normalizeTimeZone(flags.tz ?? null);
+  process.env.TR_TIMEZONE = ACTIVE_TIME_ZONE;
+
   if (command === "help") {
     if (positionals[0]) {
       process.exit(printCommandHelp(positionals[0], flags));
@@ -550,6 +602,7 @@ async function main() {
   }
 
   const commandDeps = {
+    timeZone: ACTIVE_TIME_ZONE,
     resolveQueryContext,
     requirePrivateContext,
     applyAgentRecordFilters,
@@ -562,11 +615,14 @@ async function main() {
     normalizeDateOnlyInput,
     isoDateShift,
     filterFuturePlanned,
-    filterPastActivities,
+    filterPastActivities: (activities, fromDateIso, toDateIso) =>
+      filterPastActivities(activities, fromDateIso, toDateIso, ACTIVE_TIME_ZONE),
     sortByDateAsc,
     sortByDateDesc,
     toIsoDateFromPlanned,
     toIsoDate,
+    formatDateTime,
+    summarizeActivityTime,
     withClient,
     readPasswordFromStdin,
     normalizeFtpHistory,
@@ -666,6 +722,9 @@ main().catch((error) => {
   }
   if (message.includes('Invalid date "')) {
     console.error("Tip: expected date format is YYYY-MM-DD");
+  }
+  if (message.includes('Invalid timezone "')) {
+    console.error("Tip: use an IANA timezone like America/New_York.");
   }
   console.error('Run "trainerroad-cli help" or "trainerroad-cli help <command>" for usage.');
 

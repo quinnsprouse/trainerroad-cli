@@ -1,3 +1,5 @@
+import { normalizeTimeZone, toDateOnlyInTimeZone } from "./timezone.mjs";
+
 const PROGRESSION_ZONE_META = {
   33: { zoneKey: "endurance", zoneLabel: "Endurance", sortOrder: 1 },
   16: { zoneKey: "tempo", zoneLabel: "Tempo", sortOrder: 2 },
@@ -20,8 +22,13 @@ function toIsoDateFromPlanned(item) {
 }
 
 export function toIsoDate(value) {
-  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-  return new Date(value).toISOString().slice(0, 10);
+  if (typeof value === "string" && value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  return (
+    toDateOnlyInTimeZone(value, normalizeTimeZone(), { assumeUtcForOffsetlessDateTime: true }) ??
+    new Date(value).toISOString().slice(0, 10)
+  );
 }
 
 function toIsoDateFromCalendarDate(dateValue) {

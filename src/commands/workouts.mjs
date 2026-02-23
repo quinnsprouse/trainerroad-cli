@@ -1,3 +1,17 @@
+function addLocalTimeSummary(record, summarizeActivityTime) {
+  if (!record || typeof record !== "object" || typeof summarizeActivityTime !== "function") {
+    return record;
+  }
+  const summary = summarizeActivityTime(record.started, record.durationInSeconds);
+  if (!summary) return record;
+  return { ...record, ...summary };
+}
+
+function addLocalTimeSummaryList(records, summarizeActivityTime) {
+  const rows = Array.isArray(records) ? records : [];
+  return rows.map((record) => addLocalTimeSummary(record, summarizeActivityTime));
+}
+
 export async function commandFuture(flags, deps) {
   const {
     requireNumber,
@@ -130,6 +144,7 @@ export async function commandPast(flags, deps) {
     writeOutput,
     hasAgentRecordTransforms,
     sortByDateDesc,
+    summarizeActivityTime,
   } = deps;
 
   const days = requireNumber(flags.days, 60);
@@ -144,7 +159,8 @@ export async function commandPast(flags, deps) {
   if (context.mode === "private") {
     const filtered = filterPastActivities(context.timeline.activities, fromDate, toDate).slice(0, limit);
     if (!flags.details) {
-      const { records: filteredRecords, filterSummary } = applyAgentRecordFilters(filtered, flags);
+      const recordsWithLocalTime = addLocalTimeSummaryList(filtered, summarizeActivityTime);
+      const { records: filteredRecords, filterSummary } = applyAgentRecordFilters(recordsWithLocalTime, flags);
       const payload = {
         mode: "private",
         generatedAt: new Date().toISOString(),
@@ -165,7 +181,10 @@ export async function commandPast(flags, deps) {
             return lines.join("\n");
           }
           for (const item of value.records) {
-            lines.push(`- ${item.started} id=${item.id} type=${item.type} tss=${item.tss}`);
+            const overnightLabel = item.crossesMidnightLocal ? " | overnight=true" : "";
+            lines.push(
+              `- ${item.startedAtLocal ?? item.started} id=${item.id} type=${item.type} tss=${item.tss}${overnightLabel}`,
+            );
           }
           return lines.join("\n");
         });
@@ -190,7 +209,11 @@ export async function commandPast(flags, deps) {
       ...item,
       personalRecordCount: Array.isArray(personalRecords[item.id]) ? personalRecords[item.id].length : 0,
     }));
-    const { records: filteredRecords, filterSummary } = applyAgentRecordFilters(detailRecords, flags);
+    const detailRecordsWithLocalTime = addLocalTimeSummaryList(detailRecords, summarizeActivityTime);
+    const { records: filteredRecords, filterSummary } = applyAgentRecordFilters(
+      detailRecordsWithLocalTime,
+      flags,
+    );
     const payload = {
       mode: "private",
       generatedAt: new Date().toISOString(),
@@ -215,8 +238,9 @@ export async function commandPast(flags, deps) {
           return lines.join("\n");
         }
         for (const item of value.records) {
+          const overnightLabel = item.crossesMidnightLocal ? " | overnight=true" : "";
           lines.push(
-            `- ${new Date(item.started).toISOString()} ${item.name} | id=${item.id} | tss=${item.tss} | duration=${item.durationInSeconds}s | prs=${item.personalRecordCount}`,
+            `- ${item.startedAtLocal ?? item.started} ${item.name} | id=${item.id} | tss=${item.tss} | duration=${item.durationInSeconds}s | prs=${item.personalRecordCount}${overnightLabel}`,
           );
         }
         return lines.join("\n");
@@ -286,6 +310,7 @@ export async function commandToday(flags, deps) {
     writeOutput,
     hasAgentRecordTransforms,
     toIsoDateFromPlanned,
+    summarizeActivityTime,
   } = deps;
 
   const today = normalizeDateOnlyInput(flags.date, isoDateShift(0));
@@ -316,9 +341,10 @@ export async function commandToday(flags, deps) {
       );
     }
 
+    const completedWithLocalTime = addLocalTimeSummaryList(activityRecords, summarizeActivityTime);
     const records = [
       ...plannedRecords.map((item) => ({ recordType: "planned", ...item })),
-      ...activityRecords.map((item) => ({
+      ...completedWithLocalTime.map((item) => ({
         recordType: "completed",
         ...item,
         personalRecordCount: Array.isArray(personalRecords[item.id]) ? personalRecords[item.id].length : 0,
@@ -333,9 +359,9 @@ export async function commandToday(flags, deps) {
       query: { date: today, details: Boolean(flags.details) },
       filters: filterSummary,
       member: { memberId: context.memberInfo.memberId, username: context.memberInfo.username },
-      counts: { planned: plannedRecords.length, completed: activityRecords.length },
+      counts: { planned: plannedRecords.length, completed: completedWithLocalTime.length },
       planned: plannedRecords,
-      completed: activityRecords,
+      completed: completedWithLocalTime,
       personalRecords,
       count: filteredRecords.length,
       records: filteredRecords,
@@ -372,9 +398,15 @@ export async function commandToday(flags, deps) {
         for (const item of value.completed) {
           if (flags.details) {
             const prs = Array.isArray(value.personalRecords[item.id]) ? value.personalRecords[item.id].length : 0;
-            lines.push(`- completed ${new Date(item.started).toISOString()} ${item.name} | tss=${item.tss} | prs=${prs}`);
+            const overnightLabel = item.crossesMidnightLocal ? " | overnight=true" : "";
+            lines.push(
+              `- completed ${item.startedAtLocal ?? item.started} ${item.name} | tss=${item.tss} | prs=${prs}${overnightLabel}`,
+            );
           } else {
-            lines.push(`- completed ${item.started} id=${item.id} type=${item.type} tss=${item.tss}`);
+            const overnightLabel = item.crossesMidnightLocal ? " | overnight=true" : "";
+            lines.push(
+              `- completed ${item.startedAtLocal ?? item.started} id=${item.id} type=${item.type} tss=${item.tss}${overnightLabel}`,
+            );
           }
         }
         return lines.join("\n");

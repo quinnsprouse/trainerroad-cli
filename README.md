@@ -63,6 +63,7 @@ trainerroad-cli past --days 30 --json
 trainerroad-cli plan --view current --json
 trainerroad-cli levels --json
 trainerroad-cli ftp --json
+trainerroad-cli today --tz America/New_York --json
 ```
 
 3. Discover all commands
@@ -87,6 +88,7 @@ Use `--target <username>` and/or `--public` for public mode queries.
 - `--jsonl`: one record per line
 - `--fields a,b,c`: project record fields
 - `--records-only`: lighter record payloads
+- `--tz <IANA timezone>`: localize day boundaries/timestamps (defaults to `TR_TIMEZONE` or system timezone)
 
 ## Security
 

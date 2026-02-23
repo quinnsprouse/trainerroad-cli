@@ -115,7 +115,8 @@ export const PROJECT_NOTICE = "Unofficial tool. Not affiliated with or endorsed 
 
 export const GLOBAL_NOTES = [
   PROJECT_NOTICE,
-  "Environment: TR_USERNAME, TR_PASSWORD, TR_SESSION_FILE",
+  "Environment: TR_USERNAME, TR_PASSWORD, TR_SESSION_FILE, TR_TIMEZONE",
+  "Timezone: --tz <IANA timezone> (for example America/New_York).",
   "Output modes: default JSON, --json, --jsonl, --output <path>",
   "Session file default: .trainerroad/session.json",
   "Private mode: authenticated cookie session + full workout endpoints.",
@@ -161,8 +162,7 @@ function trimFlagPrefix(flag) {
 
 function mergeFlagGroups(...groups) {
   return new Set(
-    groups
-      .flat()
+    [...groups.flat(), "tz"]
       .map((flag) => trimFlagPrefix(flag))
       .filter(Boolean),
   );

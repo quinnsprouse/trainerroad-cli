@@ -30,6 +30,7 @@ export function buildDiscoveryPayload(level = 1, commandFilter = null) {
       "node src/cli.mjs capabilities --json",
       "node src/cli.mjs whoami --json",
       "node src/cli.mjs future --days 30 --json",
+      "node src/cli.mjs today --tz America/New_York --json",
       "node src/cli.mjs help future --json",
     ],
     commandCount: commandEntries.length,
@@ -152,6 +153,11 @@ export async function commandCapabilities(flags, deps) {
       outputOptions: AGENT_OUTPUT_OPTIONS,
     },
     outputModes: ["text", "json", "jsonl"],
+    timezone: {
+      flag: "--tz <IANA timezone>",
+      environment: "TR_TIMEZONE",
+      example: "America/New_York",
+    },
   };
 
   await writeOutput(payload, flags, () => {
@@ -160,6 +166,7 @@ export async function commandCapabilities(flags, deps) {
       "- Private mode (authenticated): full timeline + workout details.",
       "- Public mode (unauthenticated): day-level TSS/ride/planned signals + FTP history.",
       "- Commands support both via automatic mode selection and --target/--public flags.",
+      "- Timezone-aware date bucketing: use --tz or TR_TIMEZONE for local-day accuracy.",
     ].join("\n");
   });
 }

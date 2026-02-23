@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { normalizeTimeZone, toDateOnlyInTimeZone } from "./lib/timezone.mjs";
 
 const BASE_URL = "https://www.trainerroad.com";
 const APP_URL = `${BASE_URL}/app`;
@@ -9,11 +10,6 @@ const DEFAULT_USER_AGENT =
 function ensureLeadingSlash(value) {
   if (!value.startsWith("/")) return `/${value}`;
   return value;
-}
-
-function toIsoDateOnly(value) {
-  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-  return new Date(value).toISOString().slice(0, 10);
 }
 
 function plannedDateToIso(item) {
@@ -38,10 +34,14 @@ export function filterFuturePlanned(plannedActivities, fromDateIso, toDateIso = 
   });
 }
 
-export function filterPastActivities(activities, fromDateIso = null, toDateIso = null) {
+export function filterPastActivities(activities, fromDateIso = null, toDateIso = null, timeZone = null) {
+  const resolvedTimeZone = normalizeTimeZone(timeZone);
   return activities
     .filter((item) => {
-      const startedDate = toIsoDateOnly(item.started);
+      const startedDate = toDateOnlyInTimeZone(item.started, resolvedTimeZone, {
+        assumeUtcForOffsetlessDateTime: true,
+      });
+      if (!startedDate) return false;
       if (fromDateIso && startedDate < fromDateIso) return false;
       if (toDateIso && startedDate > toDateIso) return false;
       return true;
