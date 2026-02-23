@@ -7,6 +7,11 @@
     "trainerroad-cli": "src/cli.mjs",
     "trcli": "src/cli.mjs"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "recon": "node scripts/recon.mjs",
     "cli": "node src/cli.mjs",
