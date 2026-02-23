@@ -1,6 +1,6 @@
 {
   "name": "trainerroad-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unofficial CLI for authenticating with TrainerRoad and querying timeline/workout data",
   "main": "src/cli.mjs",
   "bin": {
