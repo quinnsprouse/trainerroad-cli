@@ -57,11 +57,66 @@ function printGlobalHelp() {
   console.log("  node src/cli.mjs ftp --target quinnsprouse --public --json");
 }
 
+function levenshteinDistance(left, right) {
+  const a = left.toLowerCase();
+  const b = right.toLowerCase();
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const matrix = Array.from({ length: rows }, () => new Array(cols).fill(0));
+
+  for (let i = 0; i < rows; i += 1) matrix[i][0] = i;
+  for (let j = 0; j < cols; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return matrix[a.length][b.length];
+}
+
+function getCommandSuggestions(input, max = 3) {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (!value) return [];
+  const commands = Object.keys(COMMANDS);
+
+  const prefixMatches = commands.filter((name) => name.toLowerCase().startsWith(value));
+  if (prefixMatches.length > 0) return prefixMatches.slice(0, max);
+
+  const ranked = commands
+    .map((name) => ({ name, distance: levenshteinDistance(value, name) }))
+    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name));
+
+  const threshold = Math.max(2, Math.floor(value.length / 3));
+  return ranked
+    .filter((item) => item.distance <= threshold)
+    .slice(0, max)
+    .map((item) => item.name);
+}
+
+function formatUnknownCommandMessage(input) {
+  const suggestions = getCommandSuggestions(input);
+  const lines = [`unknown command "${input}" for "trainerroad-cli"`];
+  if (suggestions.length === 1) {
+    lines.push("", "Did you mean this?", `  ${suggestions[0]}`);
+  } else if (suggestions.length > 1) {
+    lines.push("", "Did you mean one of these?");
+    for (const suggestion of suggestions) lines.push(`  ${suggestion}`);
+  }
+  lines.push("", 'Run "trainerroad-cli help" for available commands.');
+  return lines.join("\n");
+}
+
 function printCommandHelp(command, flags = {}) {
   const def = COMMANDS[command];
   if (!def) {
-    console.error(`Unknown command: ${command}`);
-    printGlobalHelp();
+    console.error(formatUnknownCommandMessage(command));
     return 1;
   }
   if (flags.json) {
@@ -425,8 +480,7 @@ async function main() {
   }
 
   if (!COMMANDS[command]) {
-    console.error(`Unknown command: ${command}`);
-    printGlobalHelp();
+    console.error(formatUnknownCommandMessage(command));
     process.exit(1);
   }
 
@@ -524,6 +578,39 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error?.stack ?? String(error));
+  const message = String(error?.message ?? error ?? "Unknown error");
+  console.error(`Error: ${message}`);
+
+  const unknownDiscoverCommandMatch = message.match(/^Unknown command for --command:\s*(.+)$/);
+  if (unknownDiscoverCommandMatch) {
+    const bad = unknownDiscoverCommandMatch[1].trim();
+    const suggestions = getCommandSuggestions(bad);
+    if (suggestions.length > 0) {
+      console.error("Did you mean:");
+      for (const suggestion of suggestions) console.error(`  ${suggestion}`);
+    }
+  }
+
+  if (
+    message.includes("requires private authenticated mode") ||
+    message.includes("No target profile available")
+  ) {
+    console.error('Tip: login first: trainerroad-cli login --username <username> --password-stdin');
+  }
+  if (message.includes("No target profile available")) {
+    console.error('Tip: or use public mode: trainerroad-cli <command> --target <username> --public');
+  }
+  if (message.includes('Invalid --view "')) {
+    console.error("Tip: valid plan views are: current, phases, plans");
+  }
+  if (message.includes('Invalid date "')) {
+    console.error("Tip: expected date format is YYYY-MM-DD");
+  }
+  console.error('Run "trainerroad-cli help" or "trainerroad-cli help <command>" for usage.');
+
+  if (process.env.TR_CLI_DEBUG === "1" && error?.stack) {
+    console.error("");
+    console.error(error.stack);
+  }
   process.exit(1);
 });
