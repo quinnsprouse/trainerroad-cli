@@ -55,6 +55,88 @@ Auth is cookie-based. Local storage did not contain primary auth tokens.
     - `[{"Slot":1,"StartDate":"2013-05-10","EndDate":"2026-02-23"}]`
   - Returns `results[0].personalRecords`.
 
+## Calendar write endpoints (authenticated)
+
+- `GET /app/api/calendar/plannedactivities/{plannedActivityId}`
+  - Returns a full planned workout/activity record.
+- `GET /app/api/calendar/plannedactivities/{plannedActivityId}/alternates/{category}`
+  - Categories observed: `similar`, `easier`, `harder`, `longer`, `shorter`.
+- `PUT /app/api/react-calendar/planned-activity/{plannedActivityId}/move`
+  - JSON body:
+    - `{"newDate":{"year":2026,"month":3,"day":13}}`
+- `PUT /app/api/react-calendar/planned-activity/{plannedActivityId}/replace-with-alternate`
+  - JSON body:
+    - `{"alternateWorkoutId":1056132,"updateDuration":false}`
+- `PUT /app/api/react-calendar/planned-activity/{plannedActivityId}/switch-to-inside`
+- `PUT /app/api/react-calendar/planned-activity/{plannedActivityId}/switch-to-outside`
+
+Observed live against Quinn's account on March 11, 2026:
+
+- Moving `Recess` (`05a68215-0fd5-431e-ba3f-b3bf01210c29`) between March 12, 2026 and March 13, 2026 succeeded.
+- Replacing that workout with alternate `Totten Key` (`1056132`) and then restoring `Recess` (`18128`) succeeded.
+- Switching that workout to outside and back to inside succeeded.
+- Restoring the original workout after an alternate swap preserved the workout/date, but `recommendationReason` changed from the original planned value to an athlete-selected value (`31`).
+
+## Workout library endpoints (authenticated)
+
+- `GET /app/api/workouts/workout-profiles-by-zone`
+  - Returns zone/profile catalog and duration buckets.
+- `POST /app/api/workouts`
+  - Returns paginated workout-library results for the provided predicate.
+  - Observed default predicate shape:
+    - `pageNumber`, `pageSize`, `isDescending`, `sortProperty`
+    - `searchText`
+    - `progressions.profileIds`, `progressions.progressionIds`
+    - `durations.*` bucket booleans
+    - `workoutInstructions.yup|nope`
+    - `workoutTypes.outside`
+  - Response includes:
+    - `predicate.totalCount`
+    - `workouts[]` with fields like `id`, `workoutName`, `duration`, `tss`, `intensityFactor`, `progressionId`, `progressionLevel`, `profileId`, `profileName`, `isOutside`, `hasInstructions`
+- `POST /app/api/workouts/by-id`
+  - JSON body is an array of numeric workout IDs, e.g. `[18128]`.
+- `GET /app/api/workouts/{workoutId}/summary`
+- `GET /app/api/workouts/{workoutId}/levels`
+- `GET /app/api/workouts/{workoutId}/chart-data`
+
+## Add-workout notes
+
+- TrainerRoad exposes at least two observed add-workout paths:
+  - `POST /app/api/react-calendar/planned-tr-workout`
+  - `POST /app/api/calendar/plannedactivities/workout`
+- On Quinn's account on March 11, 2026, these add endpoints were inconsistent:
+  - some requests returned HTTP `500`
+  - at least one earlier request appears to have still resulted in calendar changes on March 18, 2026
+  - empty-date repro attempts on March 16, 2026 and March 24, 2026 did not create a confirmed workout
+- Because of that, CLI add-workout support should reconcile against the refreshed calendar after the POST rather than trusting the HTTP status alone.
+
+## Copy-workout notes
+
+- `POST /app/api/calendar/plannedactivities/{plannedActivityId}/copy/{YYYY-MM-DD}`
+- Observed live on March 11, 2026:
+  - copying planned activity `05a68215-0fd5-431e-ba3f-b3bf01210c29` to March 16, 2026 returned HTTP `204`
+  - the copied workout appeared on the target date with a new planned activity ID
+  - the copied workout could then be deleted cleanly via `DELETE /app/api/calendar/plannedactivities/{plannedActivityId}`
+
+## TrainNow / AI Workouts
+
+- `GET /app/api/train-now`
+  - Returns account-level TrainNow state such as:
+    - `hasTrainingPlan`
+    - `hasPlanWorkoutToday`
+    - `hasCompletedWorkoutToday`
+- `POST /app/api/train-now`
+  - Observed body:
+    - `{"duration":60,"numSuggestions":10}`
+  - Returns:
+    - `recommendedCategory`
+    - `suggestions.Attacking[]`
+    - `suggestions.Climbing[]`
+    - `suggestions.Endurance[]`
+    - `hasRpePredictionServiceFailure`
+- `GET /app/api/workout-information?ids=524179,265545,467754`
+  - Enriches TrainNow suggestion IDs with workout card details used by the web UI.
+
 ## Detail endpoint behavior
 
 The following endpoints return `400` unless request header `ids` is present:

@@ -37,6 +37,12 @@ export const COMMANDS = {
       "node src/cli.mjs timeline --target quinnsprouse --public --json",
     ],
   },
+  "train-now": {
+    summary: "Fetch TrainerRoad AI suggested workouts (TrainNow) for a target duration (private mode).",
+    usage: [
+      "node src/cli.mjs train-now [--duration <minutes>] [--num-suggestions <n>] [--category climbing|endurance|attacking] [--json|--jsonl]",
+    ],
+  },
   events: {
     summary: "Show calendar events/races from timeline (private mode).",
     usage: [
@@ -103,6 +109,60 @@ export const COMMANDS = {
     summary: "Show date-range personal power records from TrainerRoad PR endpoint (private mode).",
     usage: [
       "node src/cli.mjs power-records [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--row-type 100|101] [--indoor-only true|false] [--limit <n>] [--full] [--json|--jsonl]",
+    ],
+  },
+  "workout-library": {
+    summary: "Search the TrainerRoad workout library with agent-friendly filters (private mode).",
+    usage: [
+      'node src/cli.mjs workout-library [--search <text>] [--zone <name>|--zone-id <id>] [--profile <name>|--profile-id <id>] [--outside true|false] [--has-instructions true|false] [--min-duration <minutes>] [--max-duration <minutes>] [--min-tss <n>] [--max-tss <n>] [--min-level <n>] [--max-level <n>] [--sort level|level-desc|duration|duration-desc|tss|tss-desc|name|name-desc] [--limit <n>] [--page-size <n>] [--json|--jsonl]',
+    ],
+  },
+  "workout-recommend": {
+    summary: "Recommend library workouts by ranking candidates against target duration/level/TSS (private mode).",
+    usage: [
+      'node src/cli.mjs workout-recommend [--search <text>] [--zone <name>|--zone-id <id>] [--profile <name>|--profile-id <id>] [--outside true|false] [--has-instructions true|false] [--min-duration <minutes>] [--max-duration <minutes>] [--min-tss <n>] [--max-tss <n>] [--min-level <n>] [--max-level <n>] [--target-duration <minutes>] [--target-tss <n>] [--target-level <n>] [--count <n>] [--candidate-limit <n>] [--page-size <n>] [--sort level|level-desc|duration|duration-desc|tss|tss-desc|name|name-desc] [--json|--jsonl]',
+    ],
+  },
+  "workout-details": {
+    summary: "Fetch detailed workout-library metadata for a workout ID (private mode).",
+    usage: [
+      "node src/cli.mjs workout-details --id <workout-id> [--include-chart true|false] [--chart-point-limit <n>] [--json|--jsonl]",
+    ],
+  },
+  "add-workout": {
+    summary: "Add a library workout to the calendar on a target date (private mode; reconciles flaky API responses).",
+    usage: [
+      "node src/cli.mjs add-workout --workout-id <workout-id> --date YYYY-MM-DD [--outside true|false] [--json|--jsonl]",
+    ],
+  },
+  "copy-workout": {
+    summary: "Copy an existing planned workout to another date (private mode).",
+    usage: [
+      "node src/cli.mjs copy-workout --id <planned-activity-id> --date YYYY-MM-DD [--json|--jsonl]",
+    ],
+  },
+  "workout-alternates": {
+    summary: "List alternate workout options for a planned workout (private mode).",
+    usage: [
+      "node src/cli.mjs workout-alternates --id <planned-activity-id> [--category similar|easier|harder|longer|shorter] [--json|--jsonl]",
+    ],
+  },
+  "move-workout": {
+    summary: "Move a planned workout to a different date (private mode).",
+    usage: [
+      "node src/cli.mjs move-workout --id <planned-activity-id> --to YYYY-MM-DD [--json|--jsonl]",
+    ],
+  },
+  "replace-workout": {
+    summary: "Replace a planned workout with a specific alternate workout ID (private mode).",
+    usage: [
+      "node src/cli.mjs replace-workout --id <planned-activity-id> --alternate-id <workout-id> [--update-duration true|false] [--json|--jsonl]",
+    ],
+  },
+  "switch-workout": {
+    summary: "Switch a planned workout between inside and outside variants (private mode).",
+    usage: [
+      "node src/cli.mjs switch-workout --id <planned-activity-id> --mode inside|outside [--json|--jsonl]",
     ],
   },
   logout: {
@@ -211,6 +271,14 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.credentials,
     SHARED_FLAGS.publicProfile,
     ["full"],
+  ),
+  "train-now": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["duration", "num-suggestions", "category"],
   ),
   events: mergeFlagGroups(
     SHARED_FLAGS.help,
@@ -323,6 +391,116 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.session,
     SHARED_FLAGS.credentials,
     ["start-date", "end-date", "row-type", "indoor-only", "slot", "limit", "full"],
+  ),
+  "workout-library": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    [
+      "search",
+      "zone",
+      "zone-id",
+      "profile",
+      "profile-id",
+      "outside",
+      "has-instructions",
+      "min-duration",
+      "max-duration",
+      "min-tss",
+      "max-tss",
+      "min-level",
+      "max-level",
+      "sort",
+      "limit",
+      "page-size",
+    ],
+  ),
+  "workout-recommend": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    [
+      "search",
+      "zone",
+      "zone-id",
+      "profile",
+      "profile-id",
+      "outside",
+      "has-instructions",
+      "min-duration",
+      "max-duration",
+      "min-tss",
+      "max-tss",
+      "min-level",
+      "max-level",
+      "target-duration",
+      "target-tss",
+      "target-level",
+      "count",
+      "candidate-limit",
+      "page-size",
+      "sort",
+    ],
+  ),
+  "workout-details": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "include-chart", "chart-point-limit"],
+  ),
+  "add-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["workout-id", "date", "outside"],
+  ),
+  "copy-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "date"],
+  ),
+  "workout-alternates": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "category"],
+  ),
+  "move-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "to"],
+  ),
+  "replace-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "alternate-id", "update-duration"],
+  ),
+  "switch-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "mode"],
   ),
   logout: mergeFlagGroups(SHARED_FLAGS.help, SHARED_FLAGS.output, SHARED_FLAGS.session),
 };

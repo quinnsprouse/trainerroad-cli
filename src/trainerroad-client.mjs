@@ -12,6 +12,18 @@ function ensureLeadingSlash(value) {
   return value;
 }
 
+function toApiDateOnly(value) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    throw new Error(`Invalid date "${value}". Expected YYYY-MM-DD.`);
+  }
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
 function plannedDateToIso(item) {
   const year = String(item.date?.year ?? "").padStart(4, "0");
   const month = String(item.date?.month ?? "").padStart(2, "0");
@@ -443,6 +455,288 @@ export class TrainerRoadClient {
       results.push(...payload);
     }
     return results;
+  }
+
+  async getWorkoutProfilesByZone(usernameForReferer = null) {
+    return this.#requestJson("/app/api/workouts/workout-profiles-by-zone", {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/workouts/list`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+    });
+  }
+
+  async searchWorkoutLibrary(predicate, usernameForReferer = null) {
+    return this.#requestJson("/app/api/workouts", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "no-cache",
+        referer: `${APP_URL}/workouts/list`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+      body: JSON.stringify(predicate),
+    });
+  }
+
+  async getWorkoutsByIds(workoutIds, usernameForReferer = null) {
+    return this.#requestJson("/app/api/workouts/by-id", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/workouts/list`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+      body: JSON.stringify(workoutIds),
+    });
+  }
+
+  async getWorkoutSummary(workoutId, usernameForReferer = null) {
+    return this.#requestJson(`/app/api/workouts/${encodeURIComponent(workoutId)}/summary`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/workouts/list`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+    });
+  }
+
+  async getWorkoutLevels(workoutId, usernameForReferer = null) {
+    return this.#requestJson(`/app/api/workouts/${encodeURIComponent(workoutId)}/levels`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/workouts/list`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+    });
+  }
+
+  async getWorkoutChartData(workoutId, usernameForReferer = null) {
+    return this.#requestJson(`/app/api/workouts/${encodeURIComponent(workoutId)}/chart-data`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/workouts/list`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+    });
+  }
+
+  async getWorkoutInformation(workoutIds, usernameForReferer = null) {
+    const ids = (Array.isArray(workoutIds) ? workoutIds : [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+    const params = new URLSearchParams({ ids: ids.join(",") });
+    return this.#requestJson(`/app/api/workout-information?${params.toString()}`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/cycling/train-now`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+    });
+  }
+
+  async getTrainNowStatus(usernameForReferer = null) {
+    return this.#requestJson("/app/api/train-now", {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/cycling/train-now`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+    });
+  }
+
+  async getTrainNowSuggestions({ duration, numSuggestions = 10 } = {}, usernameForReferer = null) {
+    return this.#requestJson("/app/api/train-now", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "no-cache",
+        referer: `${APP_URL}/cycling/train-now`,
+        ...(usernameForReferer ? { "x-trainerroad-username": usernameForReferer } : {}),
+      },
+      body: JSON.stringify({ duration, numSuggestions }),
+    });
+  }
+
+  async tryAddWorkoutToCalendar(
+    workoutId,
+    dateIso,
+    { timeOfDay = null, isManualComplete = false, outside = false, usernameForReferer } = {},
+  ) {
+    const attempts = [
+      {
+        endpoint: "react-calendar",
+        path: "/app/api/react-calendar/planned-tr-workout",
+        body: {
+          date: toApiDateOnly(dateIso),
+          time: timeOfDay,
+          workoutId: Number(workoutId),
+          type: outside ? 1 : 0,
+          recommendationReason: null,
+        },
+      },
+      {
+        endpoint: "legacy-plannedactivities",
+        path: "/app/api/calendar/plannedactivities/workout",
+        body: {
+          id: Number(workoutId),
+          date: dateIso,
+          timeOfDay,
+          isManualComplete: Boolean(isManualComplete),
+          recommendationReason: null,
+        },
+      },
+    ];
+
+    const results = [];
+    for (const attempt of attempts) {
+      const response = await this.#request(attempt.path, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "trainerroad-jsonformat": "camel-case",
+          "tr-cache-control": "no-cache",
+          referer: `${APP_URL}/calendar/${usernameForReferer}`,
+        },
+        body: JSON.stringify(attempt.body),
+      });
+      const text = await response.text();
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = text;
+      }
+      results.push({
+        endpoint: attempt.endpoint,
+        status: response.status,
+        ok: response.ok,
+        requestBody: attempt.body,
+        response: payload,
+      });
+      if (response.ok) break;
+    }
+    return results;
+  }
+
+  async copyPlannedActivity(plannedActivityId, dateIso, usernameForReferer) {
+    const response = await this.#request(
+      `/app/api/calendar/plannedactivities/${encodeURIComponent(plannedActivityId)}/copy/${encodeURIComponent(dateIso)}`,
+      {
+        method: "POST",
+        headers: {
+          "trainerroad-jsonformat": "camel-case",
+          "tr-cache-control": "no-cache",
+          referer: `${APP_URL}/calendar/${usernameForReferer}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Request failed: ${response.status} ${response.statusText} for copy planned activity -> ${text}`,
+      );
+    }
+
+    const text = await response.text();
+    if (!text) {
+      return { ok: true, status: response.status, empty: true };
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { ok: true, status: response.status, raw: text };
+    }
+  }
+
+  async getPlannedActivity(plannedActivityId, usernameForReferer) {
+    return this.#requestJson(`/app/api/calendar/plannedactivities/${encodeURIComponent(plannedActivityId)}`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "use-cache",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+    });
+  }
+
+  async getPlannedActivityAlternates(plannedActivityId, category, usernameForReferer) {
+    return this.#requestJson(
+      `/app/api/calendar/plannedactivities/${encodeURIComponent(plannedActivityId)}/alternates/${encodeURIComponent(category)}`,
+      {
+        headers: {
+          "trainerroad-jsonformat": "camel-case",
+          "tr-cache-control": "use-cache",
+          referer: `${APP_URL}/calendar/${usernameForReferer}`,
+        },
+      },
+    );
+  }
+
+  async movePlannedActivity(plannedActivityId, newDateIso, usernameForReferer) {
+    return this.#requestJson(`/app/api/react-calendar/planned-activity/${encodeURIComponent(plannedActivityId)}/move`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        "tr-cache-control": "no-cache",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+      body: JSON.stringify({ newDate: toApiDateOnly(newDateIso) }),
+    });
+  }
+
+  async replacePlannedActivityWithAlternate(
+    plannedActivityId,
+    alternateWorkoutId,
+    { updateDuration = false, usernameForReferer } = {},
+  ) {
+    return this.#requestJson(
+      `/app/api/react-calendar/planned-activity/${encodeURIComponent(plannedActivityId)}/replace-with-alternate`,
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "trainerroad-jsonformat": "camel-case",
+          "tr-cache-control": "no-cache",
+          referer: `${APP_URL}/calendar/${usernameForReferer}`,
+        },
+        body: JSON.stringify({
+          alternateWorkoutId: Number(alternateWorkoutId),
+          updateDuration: Boolean(updateDuration),
+        }),
+      },
+    );
+  }
+
+  async switchPlannedActivityMode(plannedActivityId, mode, usernameForReferer) {
+    const normalizedMode = String(mode ?? "").trim().toLowerCase();
+    if (!["inside", "outside"].includes(normalizedMode)) {
+      throw new Error(`Invalid mode "${mode}". Expected "inside" or "outside".`);
+    }
+    return this.#requestJson(
+      `/app/api/react-calendar/planned-activity/${encodeURIComponent(plannedActivityId)}/switch-to-${normalizedMode}`,
+      {
+        method: "PUT",
+        headers: {
+          "trainerroad-jsonformat": "camel-case",
+          "tr-cache-control": "no-cache",
+          referer: `${APP_URL}/calendar/${usernameForReferer}`,
+        },
+      },
+    );
   }
 
   async getPersonalRecordsByActivityIds(memberId, usernameForReferer, activityIds) {

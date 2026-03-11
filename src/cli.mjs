@@ -31,7 +31,17 @@ import { commandLevels } from "./commands/levels.mjs";
 import { commandPlan } from "./commands/plan.mjs";
 import { commandPowerRanking, commandPowerRecords } from "./commands/power.mjs";
 import { commandTimeline } from "./commands/timeline.mjs";
+import { commandTrainNow } from "./commands/train-now.mjs";
 import { commandWeightHistory } from "./commands/weight-history.mjs";
+import { commandWorkoutLibrary } from "./commands/workout-library.mjs";
+import { commandWorkoutRecommend } from "./commands/workout-recommend.mjs";
+import { commandAddWorkout, commandCopyWorkout, commandWorkoutDetails } from "./commands/workout-tools.mjs";
+import {
+  commandMoveWorkout,
+  commandReplaceWorkout,
+  commandSwitchWorkout,
+  commandWorkoutAlternates,
+} from "./commands/workout-mutations.mjs";
 import { commandFuture, commandPast, commandToday } from "./commands/workouts.mjs";
 import {
   formatDateTimeInTimeZone,
@@ -67,6 +77,14 @@ function printGlobalHelp() {
   console.log("  node src/cli.mjs future --from 2026-03-01 --to 2026-03-31 --min-tss 60 --fields id,title,tss --jsonl");
   console.log("  node src/cli.mjs timeline --target quinnsprouse --public --json");
   console.log("  node src/cli.mjs ftp --target quinnsprouse --public --json");
+  console.log("  node src/cli.mjs move-workout --id <planned-id> --to 2026-03-13 --json");
+  console.log("  node src/cli.mjs workout-alternates --id <planned-id> --category easier --json");
+  console.log('  node src/cli.mjs workout-library --zone "Endurance" --profile "Sustained Power" --min-duration 45 --max-duration 75 --json');
+  console.log('  node src/cli.mjs workout-recommend --zone "Endurance" --profile "Sustained Power" --target-duration 60 --target-level 1.0 --count 3 --json');
+  console.log("  node src/cli.mjs train-now --duration 60 --json");
+  console.log("  node src/cli.mjs workout-details --id 18128 --include-chart --json");
+  console.log("  node src/cli.mjs add-workout --workout-id 18128 --date 2026-03-16 --json");
+  console.log("  node src/cli.mjs copy-workout --id <planned-id> --date 2026-03-16 --json");
 }
 
 function levenshteinDistance(left, right) {
@@ -650,6 +668,9 @@ async function main() {
     case "timeline":
       await commandTimeline(flags, commandDeps);
       return;
+    case "train-now":
+      await commandTrainNow(flags, commandDeps);
+      return;
     case "events":
       await commandEvents(flags, commandDeps);
       return;
@@ -685,6 +706,33 @@ async function main() {
       return;
     case "power-records":
       await commandPowerRecords(flags, commandDeps);
+      return;
+    case "workout-library":
+      await commandWorkoutLibrary(flags, commandDeps);
+      return;
+    case "workout-recommend":
+      await commandWorkoutRecommend(flags, commandDeps);
+      return;
+    case "workout-details":
+      await commandWorkoutDetails(flags, commandDeps);
+      return;
+    case "add-workout":
+      await commandAddWorkout(flags, commandDeps);
+      return;
+    case "copy-workout":
+      await commandCopyWorkout(flags, commandDeps);
+      return;
+    case "workout-alternates":
+      await commandWorkoutAlternates(flags, commandDeps);
+      return;
+    case "move-workout":
+      await commandMoveWorkout(flags, commandDeps);
+      return;
+    case "replace-workout":
+      await commandReplaceWorkout(flags, commandDeps);
+      return;
+    case "switch-workout":
+      await commandSwitchWorkout(flags, commandDeps);
       return;
     case "logout":
       await commandLogout(flags, commandDeps);

@@ -1,6 +1,6 @@
 {
   "name": "trainerroad-cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Unofficial CLI for authenticating with TrainerRoad and querying timeline/workout data",
   "main": "src/cli.mjs",
   "bin": {
@@ -21,6 +21,7 @@
     "login": "node src/cli.mjs login",
     "whoami": "node src/cli.mjs whoami",
     "timeline": "node src/cli.mjs timeline",
+    "train-now": "node src/cli.mjs train-now",
     "events": "node src/cli.mjs events",
     "annotations": "node src/cli.mjs annotations",
     "levels": "node src/cli.mjs levels",
@@ -33,6 +34,15 @@
     "ftp-prediction": "node src/cli.mjs ftp-prediction",
     "power-ranking": "node src/cli.mjs power-ranking",
     "power-records": "node src/cli.mjs power-records",
+    "workout-library": "node src/cli.mjs workout-library",
+    "workout-recommend": "node src/cli.mjs workout-recommend",
+    "workout-details": "node src/cli.mjs workout-details",
+    "add-workout": "node src/cli.mjs add-workout",
+    "copy-workout": "node src/cli.mjs copy-workout",
+    "workout-alternates": "node src/cli.mjs workout-alternates",
+    "move-workout": "node src/cli.mjs move-workout",
+    "replace-workout": "node src/cli.mjs replace-workout",
+    "switch-workout": "node src/cli.mjs switch-workout",
     "logout": "node src/cli.mjs logout"
   },
   "keywords": [

@@ -14,6 +14,19 @@ CLI to fetch TrainerRoad data for your account, including:
 - power ranking and power records
 - weight history
 
+It can also perform a small set of verified calendar writes for planned workouts:
+
+- search the workout library by zone/profile/search text/duration/level
+- fetch AI suggested workouts from TrainNow
+- recommend library workouts against target duration/level/TSS
+- fetch workout-library details by workout ID
+- add a library workout to a calendar date
+- copy an existing planned workout to another date
+- move a planned workout to a new date
+- list TrainerRoad alternate workout options
+- replace a workout with a specific alternate
+- switch a workout between inside and outside
+
 ## Install
 
 ### Run without install (npx)
@@ -64,9 +77,36 @@ trainerroad-cli plan --view current --json
 trainerroad-cli levels --json
 trainerroad-cli ftp --json
 trainerroad-cli today --tz America/New_York --json
+trainerroad-cli train-now --duration 60 --json
+trainerroad-cli workout-library --zone "Endurance" --profile "Sustained Power" --min-duration 45 --max-duration 75 --json
+trainerroad-cli workout-recommend --zone "Endurance" --profile "Sustained Power" --target-duration 60 --target-level 1.0 --count 3 --json
+trainerroad-cli workout-details --id 18128 --include-chart --json
+trainerroad-cli add-workout --workout-id 18128 --date 2026-03-16 --json
+trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
 ```
 
-3. Discover all commands
+3. Mutate planned workouts
+
+First get a planned workout ID from `future --details`:
+
+```bash
+trainerroad-cli future --days 14 --details --json
+```
+
+Then use that planned activity ID:
+
+```bash
+trainerroad-cli workout-alternates --id <planned-activity-id> --category easier --json
+trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --json
+trainerroad-cli replace-workout --id <planned-activity-id> --alternate-id <workout-id> --json
+trainerroad-cli switch-workout --id <planned-activity-id> --mode outside --json
+trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
+```
+
+`copy-workout` is the reliable way to place an existing planned workout on another date.
+`add-workout` exists, but TrainerRoad's add endpoints are still inconsistent and may fail even after retry/reconciliation.
+
+4. Discover all commands
 
 ```bash
 trainerroad-cli help
