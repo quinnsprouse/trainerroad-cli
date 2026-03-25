@@ -1,14 +1,6 @@
 const ALTERNATE_CATEGORIES = new Set(["similar", "easier", "harder", "longer", "shorter"]);
 const SWITCH_MODES = new Set(["inside", "outside"]);
 
-function requireFlag(flags, name) {
-  const value = flags[name];
-  if (value === undefined || value === null || value === "") {
-    throw new Error(`Missing required flag --${name}.`);
-  }
-  return value;
-}
-
 function toIsoDateFromApiDate(date) {
   if (!date || typeof date !== "object") return null;
   const year = String(date.year ?? "").padStart(4, "0");
@@ -69,18 +61,10 @@ async function requirePrivateMember(flags, deps) {
   return { client, memberInfo };
 }
 
-async function fetchBeforeAfter(flags, deps, mutate) {
-  const { client, memberInfo } = await requirePrivateMember(flags, deps);
-  const plannedActivityId = String(requireFlag(flags, "id"));
-  const before = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
-  const mutation = await mutate({ client, memberInfo, plannedActivityId, before });
-  const after = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
-  return { client, memberInfo, plannedActivityId, before, after, mutation };
-}
-
 export async function commandWorkoutAlternates(flags, deps) {
-  const { isJsonMode, writeOutput } = deps;
+  const { isJsonMode, requireFlag, writeOutput } = deps;
   const category = String(flags.category ?? "similar").toLowerCase();
+  const plannedActivityId = String(requireFlag("workout-alternates", flags, "id"));
   if (!ALTERNATE_CATEGORIES.has(category)) {
     throw new Error(
       `Invalid --category "${category}". Expected one of: ${Array.from(ALTERNATE_CATEGORIES).join(", ")}.`,
@@ -88,7 +72,6 @@ export async function commandWorkoutAlternates(flags, deps) {
   }
 
   const { client, memberInfo } = await requirePrivateMember(flags, deps);
-  const plannedActivityId = String(requireFlag(flags, "id"));
   const plannedActivity = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
   const alternates = await client.getPlannedActivityAlternates(
     plannedActivityId,
@@ -128,14 +111,47 @@ export async function commandWorkoutAlternates(flags, deps) {
 }
 
 export async function commandMoveWorkout(flags, deps) {
-  const { isJsonMode, writeOutput } = deps;
-  const newDate = String(requireFlag(flags, "to"));
-  const { memberInfo, plannedActivityId, before, after, mutation } = await fetchBeforeAfter(
-    flags,
-    deps,
-    async ({ client, memberInfo, plannedActivityId }) =>
-      client.movePlannedActivity(plannedActivityId, newDate, memberInfo.username),
-  );
+  const { isJsonMode, requireFlag, toBoolean, writeOutput } = deps;
+  const dryRun = toBoolean(flags["dry-run"], false);
+  const plannedActivityId = String(requireFlag("move-workout", flags, "id"));
+  const newDate = String(requireFlag("move-workout", flags, "to"));
+  const { client, memberInfo } = await requirePrivateMember(flags, deps);
+  const before = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
+  const beforeSummary = summarizePlannedActivity(before);
+  const noop = beforeSummary?.date === newDate;
+
+  if (dryRun || noop) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      command: "move-workout",
+      member: { memberId: memberInfo.memberId, username: memberInfo.username },
+      query: { plannedActivityId, to: newDate },
+      dryRun,
+      noop,
+      before: beforeSummary,
+      after: noop ? beforeSummary : { ...beforeSummary, date: newDate },
+      mutation: null,
+      message: noop
+        ? `Workout is already scheduled on ${newDate}.`
+        : `Would move ${beforeSummary?.workoutName ?? "workout"} to ${newDate}.`,
+    };
+
+    if (!isJsonMode(flags)) {
+      await writeOutput(payload, flags, (value) => {
+        if (value.noop) {
+          return `No changes: plannedActivityId=${value.query.plannedActivityId} is already on ${value.query.to}`;
+        }
+        return `Would move ${value.before?.workoutName ?? "workout"} | plannedActivityId=${value.query.plannedActivityId} | ${value.before?.date ?? "?"} -> ${value.query.to}\nNo changes made.`;
+      });
+      return;
+    }
+
+    await writeOutput(payload, { ...flags, json: !flags.jsonl });
+    return;
+  }
+
+  const mutation = await client.movePlannedActivity(plannedActivityId, newDate, memberInfo.username);
+  const after = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
 
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -158,22 +174,54 @@ export async function commandMoveWorkout(flags, deps) {
 }
 
 export async function commandReplaceWorkout(flags, deps) {
-  const { isJsonMode, toBoolean, writeOutput } = deps;
-  const alternateWorkoutId = Number(requireFlag(flags, "alternate-id"));
+  const { isJsonMode, requireFlag, toBoolean, writeOutput } = deps;
+  const dryRun = toBoolean(flags["dry-run"], false);
+  const plannedActivityId = String(requireFlag("replace-workout", flags, "id"));
+  const alternateWorkoutId = Number(requireFlag("replace-workout", flags, "alternate-id"));
   if (!Number.isFinite(alternateWorkoutId)) {
     throw new Error(`Invalid --alternate-id "${flags["alternate-id"]}". Expected a numeric workout ID.`);
   }
   const updateDuration = toBoolean(flags["update-duration"], false);
+  const { client, memberInfo } = await requirePrivateMember(flags, deps);
+  const before = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
+  const beforeSummary = summarizePlannedActivity(before);
+  const noop = Number(beforeSummary?.workoutId) === alternateWorkoutId;
 
-  const { memberInfo, plannedActivityId, before, after, mutation } = await fetchBeforeAfter(
-    flags,
-    deps,
-    async ({ client, memberInfo, plannedActivityId }) =>
-      client.replacePlannedActivityWithAlternate(plannedActivityId, alternateWorkoutId, {
-        updateDuration,
-        usernameForReferer: memberInfo.username,
-      }),
-  );
+  if (dryRun || noop) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      command: "replace-workout",
+      member: { memberId: memberInfo.memberId, username: memberInfo.username },
+      query: { plannedActivityId, alternateWorkoutId, updateDuration },
+      dryRun,
+      noop,
+      before: beforeSummary,
+      after: noop ? beforeSummary : null,
+      mutation: null,
+      message: noop
+        ? `Workout already uses alternate workout ${alternateWorkoutId}.`
+        : `Would replace workout ${beforeSummary?.workoutId ?? "?"} with ${alternateWorkoutId}.`,
+    };
+
+    if (!isJsonMode(flags)) {
+      await writeOutput(payload, flags, (value) => {
+        if (value.noop) {
+          return `No changes: plannedActivityId=${value.query.plannedActivityId} already uses workoutId=${value.query.alternateWorkoutId}`;
+        }
+        return `Would replace workout | plannedActivityId=${value.query.plannedActivityId} | workoutId=${value.before?.workoutId ?? "?"} -> alternateWorkoutId=${value.query.alternateWorkoutId}\nNo changes made.`;
+      });
+      return;
+    }
+
+    await writeOutput(payload, { ...flags, json: !flags.jsonl });
+    return;
+  }
+
+  const mutation = await client.replacePlannedActivityWithAlternate(plannedActivityId, alternateWorkoutId, {
+    updateDuration,
+    usernameForReferer: memberInfo.username,
+  });
+  const after = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
 
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -196,18 +244,50 @@ export async function commandReplaceWorkout(flags, deps) {
 }
 
 export async function commandSwitchWorkout(flags, deps) {
-  const { isJsonMode, writeOutput } = deps;
-  const mode = String(requireFlag(flags, "mode")).toLowerCase();
+  const { isJsonMode, requireFlag, toBoolean, writeOutput } = deps;
+  const dryRun = toBoolean(flags["dry-run"], false);
+  const plannedActivityId = String(requireFlag("switch-workout", flags, "id"));
+  const mode = String(requireFlag("switch-workout", flags, "mode")).toLowerCase();
   if (!SWITCH_MODES.has(mode)) {
     throw new Error(`Invalid --mode "${mode}". Expected one of: ${Array.from(SWITCH_MODES).join(", ")}.`);
   }
+  const { client, memberInfo } = await requirePrivateMember(flags, deps);
+  const before = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
+  const beforeSummary = summarizePlannedActivity(before);
+  const noop = beforeSummary?.isOutside === (mode === "outside");
 
-  const { memberInfo, plannedActivityId, before, after, mutation } = await fetchBeforeAfter(
-    flags,
-    deps,
-    async ({ client, memberInfo, plannedActivityId }) =>
-      client.switchPlannedActivityMode(plannedActivityId, mode, memberInfo.username),
-  );
+  if (dryRun || noop) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      command: "switch-workout",
+      member: { memberId: memberInfo.memberId, username: memberInfo.username },
+      query: { plannedActivityId, mode },
+      dryRun,
+      noop,
+      before: beforeSummary,
+      after: noop ? beforeSummary : { ...beforeSummary, isOutside: mode === "outside" },
+      mutation: null,
+      message: noop
+        ? `Workout is already in ${mode} mode.`
+        : `Would switch workout to ${mode} mode.`,
+    };
+
+    if (!isJsonMode(flags)) {
+      await writeOutput(payload, flags, (value) => {
+        if (value.noop) {
+          return `No changes: plannedActivityId=${value.query.plannedActivityId} is already ${value.query.mode}`;
+        }
+        return `Would switch workout | plannedActivityId=${value.query.plannedActivityId} | outside=${value.before?.isOutside} -> ${value.query.mode === "outside"}\nNo changes made.`;
+      });
+      return;
+    }
+
+    await writeOutput(payload, { ...flags, json: !flags.jsonl });
+    return;
+  }
+
+  const mutation = await client.switchPlannedActivityMode(plannedActivityId, mode, memberInfo.username);
+  const after = await client.getPlannedActivity(plannedActivityId, memberInfo.username);
 
   const payload = {
     generatedAt: new Date().toISOString(),

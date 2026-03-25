@@ -191,7 +191,7 @@ export class TrainerRoadClient {
   async login({
     username = this.username,
     password = this.password,
-    returnPath = "/app/career/quinnsprouse",
+    returnPath = username ? `/app/career/${username}` : "/app/career",
   } = {}) {
     if (!username || !password) {
       throw new Error("Username and password are required for login.");

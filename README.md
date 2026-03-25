@@ -27,6 +27,14 @@ It can also perform a small set of verified calendar writes for planned workouts
 - replace a workout with a specific alternate
 - switch a workout between inside and outside
 
+## Agent-Friendly Behavior
+
+- Non-interactive by default. Inputs are flags or stdin, not prompts.
+- Progressive disclosure. Use `trainerroad-cli help <command>` or `trainerroad-cli discover`.
+- Command help includes concrete examples and flag descriptions.
+- Write commands support `--dry-run` previews.
+- Common retry cases are idempotent no-ops instead of duplicate calendar writes.
+
 ## Install
 
 ### Run without install (npx)
@@ -82,6 +90,7 @@ trainerroad-cli workout-library --zone "Endurance" --profile "Sustained Power" -
 trainerroad-cli workout-recommend --zone "Endurance" --profile "Sustained Power" --target-duration 60 --target-level 1.0 --count 3 --json
 trainerroad-cli workout-details --id 18128 --include-chart --json
 trainerroad-cli add-workout --workout-id 18128 --date 2026-03-16 --json
+trainerroad-cli add-workout --workout-id 18128 --date 2026-03-16 --dry-run
 trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
 ```
 
@@ -97,6 +106,7 @@ Then use that planned activity ID:
 
 ```bash
 trainerroad-cli workout-alternates --id <planned-activity-id> --category easier --json
+trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --dry-run
 trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --json
 trainerroad-cli replace-workout --id <planned-activity-id> --alternate-id <workout-id> --json
 trainerroad-cli switch-workout --id <planned-activity-id> --mode outside --json
@@ -129,6 +139,15 @@ Use `--target <username>` and/or `--public` for public mode queries.
 - `--fields a,b,c`: project record fields
 - `--records-only`: lighter record payloads
 - `--tz <IANA timezone>`: localize day boundaries/timestamps (defaults to `TR_TIMEZONE` or system timezone)
+
+## Help
+
+```bash
+trainerroad-cli help
+trainerroad-cli help future
+trainerroad-cli future --help
+trainerroad-cli help move-workout --json
+```
 
 ## Security
 

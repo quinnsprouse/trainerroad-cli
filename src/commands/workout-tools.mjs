@@ -100,14 +100,6 @@ function summarizeChart(chartData, pointLimit = 200) {
   };
 }
 
-function requireFlag(flags, name) {
-  const value = flags[name];
-  if (value === undefined || value === null || value === "") {
-    throw new Error(`Missing required flag --${name}.`);
-  }
-  return value;
-}
-
 async function requirePrivateMember(flags, deps) {
   const { withClient } = deps;
   const client = await withClient(flags);
@@ -123,30 +115,6 @@ async function requirePrivateMember(flags, deps) {
 
 async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function findPlannedWorkoutOnDate(client, memberInfo, dateIso, workoutId) {
-  const timeline = await client.getTimeline(memberInfo.memberId, memberInfo.username);
-  const candidateIds = (Array.isArray(timeline?.plannedActivities) ? timeline.plannedActivities : [])
-    .filter((item) => {
-      const date = item?.date;
-      const asIso = date
-        ? `${String(date.year).padStart(4, "0")}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`
-        : null;
-      return asIso === dateIso;
-    })
-    .map((item) => item.id)
-    .filter(Boolean);
-
-  if (candidateIds.length === 0) return null;
-  const details = await client.getPlannedActivitiesByIds(
-    memberInfo.memberId,
-    memberInfo.username,
-    candidateIds,
-  );
-  const matches = details.filter((item) => Number(item?.workout?.id) === Number(workoutId));
-  if (matches.length === 0) return null;
-  return matches.sort((a, b) => String(b.modified ?? "").localeCompare(String(a.modified ?? "")))[0];
 }
 
 async function listPlannedWorkoutsOnDate(client, memberInfo, dateIso) {
@@ -167,8 +135,8 @@ async function listPlannedWorkoutsOnDate(client, memberInfo, dateIso) {
 }
 
 export async function commandWorkoutDetails(flags, deps) {
-  const { isJsonMode, requirePositiveInteger, toBoolean, writeOutput } = deps;
-  const workoutId = Number(requireFlag(flags, "id"));
+  const { isJsonMode, requireFlag, requirePositiveInteger, toBoolean, writeOutput } = deps;
+  const workoutId = Number(requireFlag("workout-details", flags, "id"));
   if (!Number.isFinite(workoutId)) {
     throw new Error(`Invalid --id "${flags.id}". Expected a numeric workout ID.`);
   }
@@ -217,9 +185,10 @@ export async function commandWorkoutDetails(flags, deps) {
 }
 
 export async function commandAddWorkout(flags, deps) {
-  const { isJsonMode, toBoolean, writeOutput } = deps;
-  const workoutId = Number(requireFlag(flags, "workout-id"));
-  const dateIso = String(requireFlag(flags, "date"));
+  const { isJsonMode, requireFlag, toBoolean, writeOutput } = deps;
+  const dryRun = toBoolean(flags["dry-run"], false);
+  const workoutId = Number(requireFlag("add-workout", flags, "workout-id"));
+  const dateIso = String(requireFlag("add-workout", flags, "date"));
   if (!Number.isFinite(workoutId)) {
     throw new Error(`Invalid --workout-id "${flags["workout-id"]}". Expected a numeric workout ID.`);
   }
@@ -232,6 +201,54 @@ export async function commandAddWorkout(flags, deps) {
     throw new Error(`Workout ${workoutId} was not found in the library.`);
   }
 
+  const existingOnDate = await listPlannedWorkoutsOnDate(client, memberInfo, dateIso);
+  const beforeIds = new Set(existingOnDate.map((item) => item.id));
+  const matchingExisting = existingOnDate
+    .filter((item) => {
+      const plannedWorkoutId = Number(item?.workout?.id);
+      const plannedOutside = item?.workout?.isOutside;
+      return plannedWorkoutId === workoutId && (plannedOutside == null || plannedOutside === outside);
+    })
+    .map((item) => summarizePlannedActivity(item))
+    .filter(Boolean);
+
+  if (dryRun) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      command: "add-workout",
+      member: { memberId: memberInfo.memberId, username: memberInfo.username },
+      query: { workoutId, date: dateIso, outside },
+      dryRun,
+      noop: false,
+      workout,
+      existingMatches: matchingExisting,
+      created: null,
+      attempts: [],
+      warnings:
+        matchingExisting.length > 0
+          ? [`Found ${matchingExisting.length} matching workout(s) already scheduled on ${dateIso}.`]
+          : [],
+      message: `Would add workout ${workoutId} to ${dateIso}.`,
+    };
+
+    if (!isJsonMode(flags)) {
+      await writeOutput(payload, flags, (value) => {
+        const lines = [
+          `Would add ${value.workout?.workoutName ?? "workout"} to ${value.query.date} | workoutId=${value.query.workoutId}`,
+        ];
+        if (value.warnings.length > 0) {
+          lines.push(...value.warnings.map((warning) => `Warning: ${warning}`));
+        }
+        lines.push("No changes made.");
+        return lines.join("\n");
+      });
+      return;
+    }
+
+    await writeOutput(payload, { ...flags, json: !flags.jsonl });
+    return;
+  }
+
   const attempts = await client.tryAddWorkoutToCalendar(workoutId, dateIso, {
     outside,
     usernameForReferer: memberInfo.username,
@@ -239,7 +256,10 @@ export async function commandAddWorkout(flags, deps) {
 
   let created = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    created = await findPlannedWorkoutOnDate(client, memberInfo, dateIso, workoutId);
+    const afterTarget = await listPlannedWorkoutsOnDate(client, memberInfo, dateIso);
+    created = afterTarget.find(
+      (item) => !beforeIds.has(item.id) && Number(item?.workout?.id) === Number(workoutId),
+    );
     if (created) break;
     await sleep(750);
   }
@@ -277,13 +297,55 @@ export async function commandAddWorkout(flags, deps) {
 }
 
 export async function commandCopyWorkout(flags, deps) {
-  const { isJsonMode, writeOutput } = deps;
-  const sourcePlannedActivityId = String(requireFlag(flags, "id"));
-  const targetDate = String(requireFlag(flags, "date"));
+  const { isJsonMode, requireFlag, toBoolean, writeOutput } = deps;
+  const dryRun = toBoolean(flags["dry-run"], false);
+  const sourcePlannedActivityId = String(requireFlag("copy-workout", flags, "id"));
+  const targetDate = String(requireFlag("copy-workout", flags, "date"));
   const { client, memberInfo } = await requirePrivateMember(flags, deps);
   const source = await client.getPlannedActivity(sourcePlannedActivityId, memberInfo.username);
   const beforeTarget = await listPlannedWorkoutsOnDate(client, memberInfo, targetDate);
   const beforeIds = new Set(beforeTarget.map((item) => item.id));
+  const matchingExisting = beforeTarget
+    .filter((item) => Number(item?.workout?.id) === Number(source?.workout?.id))
+    .map((item) => summarizePlannedActivity(item))
+    .filter(Boolean);
+
+  if (dryRun) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      command: "copy-workout",
+      member: { memberId: memberInfo.memberId, username: memberInfo.username },
+      query: { sourcePlannedActivityId, date: targetDate },
+      dryRun,
+      noop: false,
+      source: summarizePlannedActivity(source),
+      existingMatches: matchingExisting,
+      created: null,
+      mutation: null,
+      warnings:
+        matchingExisting.length > 0
+          ? [`Found ${matchingExisting.length} matching workout(s) already scheduled on ${targetDate}.`]
+          : [],
+      message: `Would copy workout to ${targetDate}.`,
+    };
+
+    if (!isJsonMode(flags)) {
+      await writeOutput(payload, flags, (value) => {
+        const lines = [
+          `Would copy ${value.source?.workoutName ?? "workout"} to ${value.query.date} | sourcePlannedActivityId=${value.query.sourcePlannedActivityId}`,
+        ];
+        if (value.warnings.length > 0) {
+          lines.push(...value.warnings.map((warning) => `Warning: ${warning}`));
+        }
+        lines.push("No changes made.");
+        return lines.join("\n");
+      });
+      return;
+    }
+
+    await writeOutput(payload, { ...flags, json: !flags.jsonl });
+    return;
+  }
 
   const mutation = await client.copyPlannedActivity(sourcePlannedActivityId, targetDate, memberInfo.username);
 

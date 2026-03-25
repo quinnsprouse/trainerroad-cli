@@ -17,7 +17,9 @@ import {
   AGENT_FILTER_OPTIONS,
   AGENT_OUTPUT_OPTIONS,
   COMMAND_FLAG_ALLOWLIST,
+  COMMAND_REQUIRED_FLAGS,
   COMMANDS,
+  FLAG_DETAILS,
   FILTERABLE_COMMANDS,
   GLOBAL_NOTES,
   PROJECT_NOTICE,
@@ -66,25 +68,27 @@ function printGlobalHelp() {
   for (const note of GLOBAL_NOTES) console.log(`  - ${note}`);
   console.log("");
   console.log("Progressive disclosure:");
-  console.log("  node src/cli.mjs discover --level 1");
-  console.log("  node src/cli.mjs discover --level 2");
-  console.log("  node src/cli.mjs discover --command future --level 3 --json");
+  console.log("  trainerroad-cli discover --level 1");
+  console.log("  trainerroad-cli discover --level 2");
+  console.log("  trainerroad-cli discover --command future --level 3 --json");
+  console.log("");
+  console.log('Use "trainerroad-cli <command> --help" for command-specific options and examples.');
   console.log("");
   console.log("Examples:");
-  console.log("  node src/cli.mjs login --username quinnsprouse --password-stdin");
-  console.log("  node src/cli.mjs future --days 30 --details --json");
-  console.log("  node src/cli.mjs today --tz America/New_York --json");
-  console.log("  node src/cli.mjs future --from 2026-03-01 --to 2026-03-31 --min-tss 60 --fields id,title,tss --jsonl");
-  console.log("  node src/cli.mjs timeline --target quinnsprouse --public --json");
-  console.log("  node src/cli.mjs ftp --target quinnsprouse --public --json");
-  console.log("  node src/cli.mjs move-workout --id <planned-id> --to 2026-03-13 --json");
-  console.log("  node src/cli.mjs workout-alternates --id <planned-id> --category easier --json");
-  console.log('  node src/cli.mjs workout-library --zone "Endurance" --profile "Sustained Power" --min-duration 45 --max-duration 75 --json');
-  console.log('  node src/cli.mjs workout-recommend --zone "Endurance" --profile "Sustained Power" --target-duration 60 --target-level 1.0 --count 3 --json');
-  console.log("  node src/cli.mjs train-now --duration 60 --json");
-  console.log("  node src/cli.mjs workout-details --id 18128 --include-chart --json");
-  console.log("  node src/cli.mjs add-workout --workout-id 18128 --date 2026-03-16 --json");
-  console.log("  node src/cli.mjs copy-workout --id <planned-id> --date 2026-03-16 --json");
+  console.log("  trainerroad-cli login --username quinnsprouse --password-stdin");
+  console.log("  trainerroad-cli future --days 30 --details --json");
+  console.log("  trainerroad-cli today --tz America/New_York --json");
+  console.log("  trainerroad-cli future --from 2026-03-01 --to 2026-03-31 --min-tss 60 --fields id,title,tss --jsonl");
+  console.log("  trainerroad-cli timeline --target quinnsprouse --public --json");
+  console.log("  trainerroad-cli ftp --target quinnsprouse --public --json");
+  console.log("  trainerroad-cli move-workout --id <planned-id> --to 2026-03-13 --dry-run");
+  console.log("  trainerroad-cli workout-alternates --id <planned-id> --category easier --json");
+  console.log('  trainerroad-cli workout-library --zone "Endurance" --profile "Sustained Power" --min-duration 45 --max-duration 75 --json');
+  console.log('  trainerroad-cli workout-recommend --zone "Endurance" --profile "Sustained Power" --target-duration 60 --target-level 1.0 --count 3 --json');
+  console.log("  trainerroad-cli train-now --duration 60 --json");
+  console.log("  trainerroad-cli workout-details --id 18128 --include-chart --json");
+  console.log("  trainerroad-cli add-workout --workout-id 18128 --date 2026-03-16 --dry-run");
+  console.log("  trainerroad-cli copy-workout --id <planned-id> --date 2026-03-16 --json");
 }
 
 function levenshteinDistance(left, right) {
@@ -197,6 +201,45 @@ function validateCommandFlags(command, flags) {
   return { unknownFlags, allowlist: Array.from(allowlist) };
 }
 
+function formatFlagLabel(name) {
+  const detail = FLAG_DETAILS[name] ?? {};
+  return `--${name}${detail.placeholder ? ` ${detail.placeholder}` : ""}`;
+}
+
+function getCommandHelpOptions(command) {
+  const allowlist = Array.from(COMMAND_FLAG_ALLOWLIST[command] ?? []);
+  const requiredFlags = new Set(COMMAND_REQUIRED_FLAGS[command] ?? []);
+  return allowlist.map((name) => ({
+    name,
+    label: formatFlagLabel(name),
+    description: FLAG_DETAILS[name]?.description ?? "No description available.",
+    required: requiredFlags.has(name),
+  }));
+}
+
+function formatMissingRequiredFlagMessage(command, flagName) {
+  const def = COMMANDS[command];
+  const requiredFlags = (COMMAND_REQUIRED_FLAGS[command] ?? []).map((name) => `--${name}`);
+  const usageLines = Array.isArray(def?.usage) ? def.usage : [];
+  const exampleLines = Array.isArray(def?.examples) ? def.examples : [];
+  const lines = [`Missing required flag --${flagName} for "trainerroad-cli ${command}".`];
+
+  if (requiredFlags.length > 0) {
+    lines.push("", `Required flags: ${requiredFlags.join(", ")}`);
+  }
+  if (usageLines.length > 0) {
+    lines.push("", "Usage:");
+    for (const line of usageLines) lines.push(`  ${line}`);
+  }
+  if (exampleLines.length > 0) {
+    lines.push("", "Examples:");
+    for (const line of exampleLines) lines.push(`  ${line}`);
+  }
+
+  lines.push("", `Run "trainerroad-cli help ${command}" for more detail.`);
+  return lines.join("\n");
+}
+
 function printCommandHelp(command, flags = {}) {
   const def = COMMANDS[command];
   if (!def) {
@@ -204,11 +247,16 @@ function printCommandHelp(command, flags = {}) {
     return 1;
   }
   if (flags.json) {
+    const options = getCommandHelpOptions(command);
     const payload = {
       command,
       summary: def.summary,
       usage: def.usage,
-      timezoneOption: "--tz <IANA timezone> (defaults to TR_TIMEZONE or system timezone)",
+      examples: def.examples ?? [],
+      options,
+      requiredFlags: options.filter((option) => option.required).map((option) => option.name),
+      nonInteractive: true,
+      supportsDryRun: options.some((option) => option.name === "dry-run"),
       supportsAgentFilters: FILTERABLE_COMMANDS.has(command),
       agentFilterOptions: FILTERABLE_COMMANDS.has(command) ? AGENT_FILTER_OPTIONS : [],
       agentOutputOptions: FILTERABLE_COMMANDS.has(command) ? AGENT_OUTPUT_OPTIONS : [],
@@ -225,18 +273,15 @@ function printCommandHelp(command, flags = {}) {
   console.log("Usage:");
   for (const line of def.usage) console.log(`  ${line}`);
   console.log("");
-  console.log("Timezone:");
-  console.log("  --tz <IANA timezone> Override local-day bucketing (defaults: TR_TIMEZONE or system timezone).");
-  if (FILTERABLE_COMMANDS.has(command)) {
+  console.log("Options:");
+  for (const option of getCommandHelpOptions(command)) {
+    const suffix = option.required ? " [required]" : "";
+    console.log(`  ${option.label.padEnd(34)} ${option.description}${suffix}`);
+  }
+  if (Array.isArray(def.examples) && def.examples.length > 0) {
     console.log("");
-    console.log("Agent filters:");
-    for (const option of AGENT_FILTER_OPTIONS) {
-      console.log(`  ${option.flag.padEnd(14)} ${option.description}`);
-    }
-    console.log("Agent output options:");
-    for (const option of AGENT_OUTPUT_OPTIONS) {
-      console.log(`  ${option.flag.padEnd(14)} ${option.description}`);
-    }
+    console.log("Examples:");
+    for (const line of def.examples) console.log(`  ${line}`);
   }
   return 0;
 }
@@ -643,6 +688,13 @@ async function main() {
     summarizeActivityTime,
     withClient,
     readPasswordFromStdin,
+    requireFlag: (commandName, incomingFlags, flagName) => {
+      const value = incomingFlags[flagName];
+      if (value === undefined || value === null || value === "") {
+        throw new Error(formatMissingRequiredFlagMessage(commandName, flagName));
+      }
+      return value;
+    },
     normalizeFtpHistory,
     getLastItem,
     normalizeFitnessThresholds,

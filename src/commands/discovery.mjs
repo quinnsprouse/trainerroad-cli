@@ -12,6 +12,7 @@ export function buildDiscoveryPayload(level = 1, commandFilter = null) {
       name,
       summary: def.summary,
       usage: level >= 2 ? def.usage : undefined,
+      examples: level >= 2 ? def.examples : undefined,
       supportsAgentFilters: FILTERABLE_COMMANDS.has(name),
       agentFilters: level >= 3 && FILTERABLE_COMMANDS.has(name) ? AGENT_FILTER_OPTIONS : undefined,
       agentOutputOptions:
@@ -27,11 +28,11 @@ export function buildDiscoveryPayload(level = 1, commandFilter = null) {
       level3: "Apply --from/--to/--type/--contains/--min-tss/--max-tss/--sort/--result-limit/--fields.",
     },
     firstSteps: [
-      "node src/cli.mjs capabilities --json",
-      "node src/cli.mjs whoami --json",
-      "node src/cli.mjs future --days 30 --json",
-      "node src/cli.mjs today --tz America/New_York --json",
-      "node src/cli.mjs help future --json",
+      "trainerroad-cli capabilities --json",
+      "trainerroad-cli whoami --json",
+      "trainerroad-cli future --days 30 --json",
+      "trainerroad-cli today --tz America/New_York --json",
+      "trainerroad-cli help future --json",
     ],
     commandCount: commandEntries.length,
     commands: commandEntries,
@@ -42,17 +43,17 @@ export function buildDiscoveryPayload(level = 1, commandFilter = null) {
       {
         pattern: "Summarize future workouts in a date window",
         command:
-          "node src/cli.mjs future --from 2026-03-01 --to 2026-03-31 --fields id,title,tss,date --sort date --json",
+          "trainerroad-cli future --from 2026-03-01 --to 2026-03-31 --fields id,title,tss,date --sort date --json",
       },
       {
         pattern: "Find hard completed rides",
         command:
-          "node src/cli.mjs past --days 90 --details --min-tss 80 --sort tss-desc --result-limit 20 --jsonl",
+          "trainerroad-cli past --days 90 --details --min-tss 80 --sort tss-desc --result-limit 20 --jsonl",
       },
       {
         pattern: "Extract only fields for downstream tools",
         command:
-          "node src/cli.mjs today --details --fields recordType,name,started,tss --json",
+          "trainerroad-cli today --details --fields recordType,name,started,tss --json",
       },
     ];
   }

@@ -1,6 +1,6 @@
 {
   "name": "trainerroad-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Unofficial CLI for authenticating with TrainerRoad and querying timeline/workout data",
   "main": "src/cli.mjs",
   "bin": {
@@ -9,10 +9,12 @@
   },
   "files": [
     "src",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "test": "node --test",
     "recon": "node scripts/recon.mjs",
     "cli": "node src/cli.mjs",
     "help": "node src/cli.mjs help",
