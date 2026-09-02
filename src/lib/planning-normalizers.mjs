@@ -135,6 +135,8 @@ export function compactCurrentPlan(plan) {
     dateOnly: plan.start ? toIsoDate(plan.start) : null,
     canEdit: plan.canEdit ?? null,
     currentPhase: plan.currentPhase ?? null,
+    currentPhaseId: plan.currentPhaseId ?? null,
+    currentPhaseName: plan.currentPhaseName ?? null,
     currentPhaseStart: plan.currentPhaseStart ?? null,
     currentPhaseEnd: plan.currentPhaseEnd ?? null,
     plannedActivityGroupType: plan.plannedActivityGroupType ?? null,
@@ -153,28 +155,26 @@ function dateWindowContains(start, end, dateOnly) {
   return startDateOnly <= dateOnly && dateOnly <= endDateOnly;
 }
 
+// Phases carry the plan's id. When they don't, fall back to phases that sit inside the plan window.
 function phaseBelongsToPlan(phase, plan) {
   if (phase?.customPlanId != null && plan?.id != null) {
     return String(phase.customPlanId) === String(plan.id);
   }
   const phaseStart = phase?.start ? toIsoDate(phase.start) : null;
   const phaseEnd = phase?.end ? toIsoDate(phase.end) : null;
-  return Boolean(phaseStart && phaseEnd && dateWindowContains(plan?.start, plan?.end, phaseStart) && dateWindowContains(plan?.start, plan?.end, phaseEnd));
+  return dateWindowContains(plan?.start, plan?.end, phaseStart) && dateWindowContains(plan?.start, plan?.end, phaseEnd);
 }
 
-/**
- * Fallback for when /plan-builder/current-custom-plan is unavailable: pick the plan from
- * all-user-plans whose start/end window contains today, and attach its plan-phases rows.
- * Returns a raw-shaped plan object compatible with compactCurrentPlan, or null.
- */
+// Replacement for the retired current-custom-plan endpoint: the plan whose window contains today,
+// with its phases attached. Returns a raw-shaped plan for compactCurrentPlan, or null.
 export function deriveCurrentPlanFromPlans(plans, phases, todayDateOnly, { memberId = null } = {}) {
   const planList = Array.isArray(plans) ? plans : [];
   const phaseList = Array.isArray(phases) ? phases : [];
-  const activePlans = planList.filter((plan) => dateWindowContains(plan?.start, plan?.end, todayDateOnly));
-  if (activePlans.length === 0) return null;
-  // Prefer the most recently started plan when windows overlap.
-  activePlans.sort((a, b) => toIsoDate(b.start).localeCompare(toIsoDate(a.start)));
+  const activePlans = planList
+    .filter((plan) => dateWindowContains(plan?.start, plan?.end, todayDateOnly))
+    .sort((a, b) => toIsoDate(b.start).localeCompare(toIsoDate(a.start)));
   const plan = activePlans[0];
+  if (!plan) return null;
 
   const planPhases = phaseList
     .filter((phase) => phaseBelongsToPlan(phase, plan))
@@ -192,6 +192,8 @@ export function deriveCurrentPlanFromPlans(plans, phases, todayDateOnly, { membe
     end: plan.end ?? null,
     canEdit: plan.canEdit ?? null,
     currentPhase: currentPhase?.type ?? plan.phase ?? null,
+    currentPhaseId: currentPhase?.id ?? null,
+    currentPhaseName: currentPhase?.planName ?? null,
     currentPhaseStart: currentPhase?.start ?? null,
     currentPhaseEnd: currentPhase?.end ?? null,
     plannedActivityGroupType: plan.plannedActivityGroupType ?? null,

@@ -2,41 +2,63 @@
 
 Date captured: 2026-02-23
 
-## Authentication flow
+## Authentication flow (current, captured 2026-09-02)
 
-1. `GET /app/login?ReturnUrl=%2Fapp%2Fcareer%2F{username}`
-2. Parse hidden form inputs:
-   - `ReturnUrl`
-   - `__RequestVerificationToken`
-3. `POST /app/login` (`application/x-www-form-urlencoded`) with:
-   - `Username`
-   - `Password`
-   - `ReturnUrl`
-   - `__RequestVerificationToken`
-4. Success behavior:
-   - HTTP `302` redirect to `/app/career/{username}`
-   - `Set-Cookie: SharedTrainerRoadAuth=...`
+`/app/login` is a React single-page app. It authenticates with one JSON call:
+
+- `POST /app/api/login/login` with `content-type: application/json` and the usual
+  `trainerroad-jsonformat: camel-case` header.
+- Body: `{"username": "<username or email>", "password": "...", "returnUrl": "/app/career/<username>" | null}`
+- Bad credentials: HTTP 200 with `{"success": false, "redirectUrl": null}`.
+- Success: HTTP 200 with `{"success": true, "redirectUrl": "..."}` and `Set-Cookie: SharedTrainerRoadAuth=...`.
+  The web app then navigates to `redirectUrl`.
 
 Auth is cookie-based. Local storage did not contain primary auth tokens.
 
-> **2026-09-02:** `/app/login` is now a React single-page app with no server-rendered form, so the
-> flow above no longer works (the CLI fails with "Could not locate __RequestVerificationToken").
-> The SPA authenticates with `POST /app/api/login/login` (`application/json`) and a body of
-> `{"username": "...", "password": "...", "returnUrl": null}`. A bad credential returns HTTP 200
-> with `{"redirectUrl": null, "success": false}`. Success handling has not been captured yet.
+### Legacy form flow (worked until mid-2026)
+
+The CLI keeps this as a fallback in case the JSON route goes away.
+
+1. `GET /app/login?ReturnUrl=%2Fapp%2Fcareer%2F{username}`
+2. Parse hidden form inputs `ReturnUrl` and `__RequestVerificationToken`.
+3. `POST /app/login` (`application/x-www-form-urlencoded`) with `Username`, `Password`, `ReturnUrl`,
+   `__RequestVerificationToken`.
+4. Success: HTTP `302` to `/app/career/{username}` plus `Set-Cookie: SharedTrainerRoadAuth=...`.
+
+## Response casing
+
+The API returns PascalCase keys (`MemberId`, `Start`) unless the request carries
+`trainerroad-jsonformat: camel-case`. The web app sends that header on every call, and so does the
+CLI. If a payload still comes back PascalCase the client lower-cases the first letter of each key.
+
+## Member-id vs username paths
+
+Several endpoints that used to accept a username now 404 on it and want the numeric `memberId`.
+Confirmed 2026-09-02 (member 211199):
+
+| Path | username | memberId |
+| --- | --- | --- |
+| `/app/api/plan-builder/{id}/all-user-plans` | 404 | 200 |
+| `/app/api/plan-builder/{id}/plan-phases` | 404 | 200 |
+| `/app/api/plan-builder/current-custom-plan/{id}` | 404 | 404 |
+| `/app/api/career/{id}/new` | 404 | 200 |
+| `/app/api/tss/{id}` (public) | 200 | 404 |
+
+Send `referer: https://www.trainerroad.com/app/career/{username}` on member-keyed calls.
 
 ## Plan-builder endpoints (authenticated)
 
-Plan-builder paths are keyed by the numeric `memberId`, not the username. Username-keyed paths 404.
-Send `referer: https://www.trainerroad.com/app/career/{username}`.
+The web calendar loads only `all-user-plans` and `plan-phases`; it never calls `current-custom-plan`.
 
-- `GET /app/api/plan-builder/{memberId}/all-user-plans` — 200. Array of plan summaries with
-  `id`, `name`, `discipline`, `volume`, `phase`, `start`, `end`, `isAdHoc`, `plannedActivityGroupId`.
-- `GET /app/api/plan-builder/{memberId}/plan-phases` — 200. Array of phase rows with `id`,
-  `customPlanId`, `type`, `volume`, `planId`, `planName`, `start`, `end`, `isMasters`, `isPolarized`.
-- `GET /app/api/plan-builder/current-custom-plan/{memberId}` — 404 for at least some members
-  (also 404 as `/{memberId}/current-custom-plan`). The CLI treats this as "no explicit current plan"
-  and derives the current plan from `all-user-plans` (window containing today) plus its `plan-phases`.
+- `GET /app/api/plan-builder/{memberId}/all-user-plans` — array of plan summaries:
+  `id` (GUID), `name`, `discipline` (int), `volume` (int), `phase`, `start`, `end` (local date-times,
+  no offset), `isAdHoc`, `plannedActivityGroupId`, `inputJson` (the plan-builder wizard input).
+- `GET /app/api/plan-builder/{memberId}/plan-phases` — array of phase rows: `id`, `customPlanId`
+  (matches a plan `id`), `type` (int), `volume`, `planId`, `planName` (e.g. "Sustained Power Build"),
+  `start`, `end` (ends at `23:59:59.999`), `isMasters`, `isPolarized`. A phase can start a few days
+  before its plan's `start`, so match phases to plans by `customPlanId`, not by date.
+- `GET /app/api/plan-builder/current-custom-plan/{memberId}` — 404. The CLI treats this as "no
+  explicit current plan" and derives it from the two calls above (plan window containing today).
 
 ## Core data endpoints
 
@@ -61,7 +83,7 @@ Send `referer: https://www.trainerroad.com/app/career/{username}`.
 
 - `GET /app/api/career/{memberId}/levels`
   - Returns progression-level object keyed by progression ID and timestamp.
-- `GET /app/api/career/{username}/new`
+- `GET /app/api/career/{memberId}/new` (username 404s since mid-2026)
   - Returns career summary fields including `ftp`, `weightKg`, and plan flags.
 - `GET /app/api/ai-ftp-detection/can-use-ai-ftp/{memberId}`
   - Returns AI FTP eligibility (`can`, `reason`) and additional detection data.

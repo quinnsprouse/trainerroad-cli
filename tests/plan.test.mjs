@@ -253,3 +253,10 @@ test("deriveCurrentPlanFromPlans falls back to date containment when phases lack
   assert.deepEqual(derived.phases.map((phase) => phase.type), ["base", "build", "specialty"]);
   assert.equal(derived.currentPhase, "build");
 });
+
+test("derived current plan names the active phase for agents", () => {
+  const derived = deriveCurrentPlanFromPlans(PLANS, PHASES, TODAY);
+  assert.equal(derived.currentPhaseId, 3);
+  assert.equal(derived.currentPhaseName, "Fondo Build");
+  assert.equal(derived.currentPhase, "build");
+});

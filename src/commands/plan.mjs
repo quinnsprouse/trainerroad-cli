@@ -8,9 +8,7 @@ import {
 import { isHttpStatus } from "../trainerroad-client.mjs";
 import { dateOnlyNowInTimeZone } from "../lib/timezone.mjs";
 
-// TrainerRoad's current-custom-plan endpoint is not reliably available (it 404s for members
-// who build plans through the newer plan-builder flow). Treat a 404 as "no explicit current
-// plan" and fall back to deriving it from all-user-plans + plan-phases.
+// current-custom-plan 404s for plan-builder plans; the web app no longer calls it either.
 async function fetchCurrentCustomPlanOrNull(client, memberId, username) {
   try {
     return await client.getCurrentCustomPlan(memberId, username);
@@ -40,7 +38,6 @@ export async function commandPlan(flags, deps) {
     throw new Error(`Invalid --view "${view}". Expected one of: current, phases, plans.`);
   }
 
-  // plan-builder endpoints are keyed by the numeric memberId; the username only belongs in the referer.
   const { memberId, username } = context.memberInfo;
   const [explicitCurrentPlanRaw, allPlansRaw, phasesRaw] = await Promise.all([
     fetchCurrentCustomPlanOrNull(context.client, memberId, username),
