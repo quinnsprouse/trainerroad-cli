@@ -44,6 +44,7 @@ import {
   commandReplaceWorkout,
   commandSwitchWorkout,
   commandWorkoutAlternates,
+  commandRemoveWorkout,
 } from "./commands/workout-mutations.mjs";
 import {
   commandAddAnnotation,
@@ -796,6 +797,9 @@ async function main() {
       return;
     case "switch-workout":
       await commandSwitchWorkout(flags, commandDeps);
+      return;
+    case "remove-workout":
+      await commandRemoveWorkout(flags, commandDeps);
       return;
     case "workout-image":
       await commandWorkoutImage(flags, commandDeps);

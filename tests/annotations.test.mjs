@@ -18,7 +18,7 @@ function detail(overrides = {}) {
     title: "Head cold",
     text: "resting",
     styleIndex: 2,
-    typeId: 4,
+    typeId: 2,
     colorId: 2,
     colorHex: "#c7251a",
     plannedActivityGroupId: null,
@@ -111,7 +111,7 @@ test("add-annotation posts a whole-day duration and reports the created annotati
     duration: 172800,
     title: "Head cold",
     text: "resting",
-    typeId: 4,
+    typeId: 2,
     colorId: 2,
   });
   assert.equal(create[2], "quinnsprouse");
@@ -133,7 +133,7 @@ test("add-annotation --days sets the duration and defaults the title to the type
 
   const body = client.calls.find(([name]) => name === "createAnnotation")[1];
   assert.equal(body.duration, 3 * 86400);
-  assert.equal(body.typeId, 2);
+  assert.equal(body.typeId, 4);
   assert.equal(body.title, "Time Off");
   assert.equal(outputs[0].query.endDateOnly, "2026-09-23");
 });
@@ -146,7 +146,7 @@ test("add-annotation accepts aliases and numeric type ids", async () => {
   await commandAddAnnotation({ type: "3", date: "2026-09-21", json: true }, deps);
 
   const typeIds = client.calls.filter(([name]) => name === "createAnnotation").map(([, body]) => body.typeId);
-  assert.deepEqual(typeIds, [4, 3]);
+  assert.deepEqual(typeIds, [2, 3]);
 });
 
 test("add-annotation rejects unknown types and end dates before the start", async () => {
@@ -185,7 +185,7 @@ test("annotation-details returns the compact detail shape", async () => {
   assert.deepEqual(outputs[0].annotation, {
     id: "ann-1",
     type: "illness",
-    typeId: 4,
+    typeId: 2,
     typeLabel: "illness",
     title: "Head cold",
     text: "resting",

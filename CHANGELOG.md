@@ -3,6 +3,8 @@
 ## 0.4.0 - 2026-09-02
 
 - Added `add-annotation`, `remove-annotation`, and `annotation-details`: create time off, illness, injury, and note entries (single or multi-day via `--days` or `--end-date`), remove them by id (no-op when already gone), and read the title and notes that the timeline rows omit. Uses `POST/DELETE /app/api/calendar/annotations` and `GET /app/api/react-calendar/annotation/{id}`, confirmed live.
+- Added `remove-workout`: deletes a planned workout or event by planned-activity id via `DELETE /app/api/calendar/plannedactivities/{id}` (confirmed live), with `--dry-run` and a no-op when the record is already gone.
+- Fixed swapped annotation type labels: typeId 2 is illness and typeId 4 is time off (checked against the web app's enum and real calendar entries). Plan-marker ids 5 to 10 are now labelled too.
 - Added `workout-image`: saves a workout's power-profile chart as PNG (default, via the optional `@resvg/resvg-js` package) or SVG. Workout records from `workout-library` and `workout-details` now include `chartUrl`.
 - Fixed `power-records`: the web app moved to `POST /app/api/personal-records/{memberId}`; the old `/for-date-range` path stays as a 404 fallback.
 - Key normalisation now runs per object at every depth, because personal-records nests PascalCase rows inside a camelCase envelope.

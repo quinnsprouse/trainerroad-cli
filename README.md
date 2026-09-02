@@ -26,6 +26,7 @@ It can also perform a small set of verified calendar writes for planned workouts
 - list TrainerRoad alternate workout options
 - replace a workout with a specific alternate
 - switch a workout between inside and outside
+- remove a planned workout or event
 - add and remove calendar annotations: time off, illness, injury, notes
 - save a workout's power-profile chart as PNG or SVG
 
@@ -137,6 +138,7 @@ trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --json
 trainerroad-cli replace-workout --id <planned-activity-id> --alternate-id <workout-id> --json
 trainerroad-cli switch-workout --id <planned-activity-id> --mode outside --json
 trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
+trainerroad-cli remove-workout --id <planned-activity-id> --dry-run
 ```
 
 `copy-workout` is the reliable way to place an existing planned workout on another date.

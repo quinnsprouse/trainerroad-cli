@@ -380,6 +380,22 @@ export class TrainerRoadClient {
     return text;
   }
 
+  async deletePlannedActivity(plannedActivityId, usernameForReferer) {
+    const path = `/app/api/calendar/plannedactivities/${encodeURIComponent(plannedActivityId)}`;
+    const response = await this.#request(path, {
+      method: "DELETE",
+      headers: { referer: `${APP_URL}/calendar/${usernameForReferer}` },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(
+        `Request failed: ${response.status} ${response.statusText} for ${path} -> ${text}`,
+        { status: response.status, statusText: response.statusText, path, payload: text },
+      );
+    }
+    return { ok: true, status: response.status };
+  }
+
   async getAnnotation(annotationId, usernameForReferer) {
     return this.#requestJson(`/app/api/react-calendar/annotation/${encodeURIComponent(annotationId)}`, {
       headers: {

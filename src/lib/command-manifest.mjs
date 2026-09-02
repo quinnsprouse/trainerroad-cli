@@ -264,6 +264,15 @@ export const COMMANDS = {
       "trainerroad-cli switch-workout --id 123456 --mode outside --json",
     ],
   },
+  "remove-workout": {
+    summary:
+      "Remove a planned workout or event from the calendar by planned-activity id. TrainerRoad may rebuild the plan around the gap (private mode).",
+    usage: ["trainerroad-cli remove-workout --id <planned-activity-id> [--dry-run] [--json|--jsonl]"],
+    examples: [
+      "trainerroad-cli remove-workout --id 05a68215-0fd5-431e-ba3f-b3bf01210c29 --dry-run",
+      "trainerroad-cli remove-workout --id 05a68215-0fd5-431e-ba3f-b3bf01210c29 --json",
+    ],
+  },
   "workout-image": {
     summary: "Save a workout's power-profile chart as PNG (default) or SVG (private mode).",
     usage: [
@@ -361,6 +370,7 @@ export const COMMAND_REQUIRED_FLAGS = {
   "move-workout": ["id", "to"],
   "replace-workout": ["id", "alternate-id"],
   "switch-workout": ["id", "mode"],
+  "remove-workout": ["id"],
   "workout-image": ["id"],
   "annotation-details": ["id"],
   "add-annotation": ["type", "date"],
@@ -547,6 +557,9 @@ export const COMMAND_FLAG_DETAILS = {
   },
   "workout-image": {
     id: { placeholder: "<workout-id>", description: "Library workout id (from workout-library, workout-details, or future --details)." },
+  },
+  "remove-workout": {
+    id: { placeholder: "<planned-activity-id>", description: "Planned activity id from `future --details` or `events`." },
   },
   "remove-annotation": {
     id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
@@ -832,6 +845,15 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.credentials,
     SHARED_FLAGS.writeSafety,
     ["id", "mode"],
+  ),
+  "remove-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["id"],
   ),
   "workout-image": mergeFlagGroups(
     SHARED_FLAGS.help,

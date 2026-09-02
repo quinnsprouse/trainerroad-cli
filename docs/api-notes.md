@@ -72,9 +72,35 @@ only `id`, `typeId`, `date`, `duration`, `groupId`, `updated`; the title and not
   `{"date":"YYYY-MM-DD","timeOfDay":null,"duration":<days*86400>,"title":"...","text":"...","typeId":<n>,"colorId":2}`.
   `date` must be a plain date string; a `{year,month,day}` object is rejected with 400. Responds 204
   with no body, so the new id has to be found by diffing the timeline.
+- `PUT /app/api/calendar/annotations/{annotationId}` — same body as create (from the web bundle, not
+  yet exercised by the CLI).
+- `PUT /app/api/calendar/annotations/{annotationId}/move` — `{"newDate":"YYYY-MM-DD","oldDate":"YYYY-MM-DD"}`.
 - `DELETE /app/api/calendar/annotations/{annotationId}` — 204. `GET` on that path is 405.
-- Type ids seen in data: 1 note, 2 time-off, 3 injury, 4 illness, 9 plan-marker. The web UI also
-  offers "Rest Day" and "Other" adjustments whose ids are not confirmed yet.
+- `DELETE /app/api/react-calendar/annotation/{annotationId}` — the variant the web app uses from its
+  "delete and adapt" modal, followed by `PUT /app/api/calendar/plans/plan/{planId}/reapply-plan`.
+- Type ids (web-app enum, checked against real annotations 2026-09-02): 1 note, 2 illness, 3 injury,
+  4 time-off, 5 stage-race, 6 custom-plan-start, 7 custom-plan-week, 8 custom-plan-block,
+  9 plan-start, 10 plan-week. Only 1 to 4 are user-editable. Earlier notes here had 2 and 4 swapped.
+
+## Event and planned-activity write endpoints (from the web bundle, 2026-09-02)
+
+Base: `/app/api/calendar/plannedactivities`. Events are planned activities with `activityType` 1.
+
+- `POST .../event` — `{"customPlanId":null,"name":"...","date":"YYYY-MM-DD","time":null,"discipline":<n>,"duration":<seconds>,"notes":"","racePriority":1|2|3,"stressEstimateType":1|2,"stressEstimateValue":<intensity or null>,"tss":<tss or null>,"manuallyCompleted":false}`.
+  TSS mode: `stressEstimateType` 1 with `tss` set. Intensity mode: `stressEstimateType` 2 with `stressEstimateValue`.
+- `PUT .../{eventId}/event` — same body.
+- `DELETE .../{plannedActivityId}` — 204 for workouts and events alike. Confirmed live on a throwaway
+  copy of a workout; the record 404s afterwards.
+- `POST .../workout` — `{"date":"YYYY-MM-DD","isManualComplete":false,"recommendationReason":37,"time":null,"type":0|1|5,"workoutId":<id>}` (type 0 inside, 1 outside, 5 group workout; 37 = athlete-selected).
+- `POST .../ai-workout` — `{"date","time","duration":<minutes>,"isManualComplete":false,"maxDynamicDuration","zone","profileId","type"}`.
+- `PUT .../{id}/skip` (body `null`), `PUT .../{id}/pin` (`{"pinned":true}`), `POST .../{id}/mark-manually-complete` (`{"completed":true}`), `POST .../{id}/copy/{YYYY-MM-DD}`.
+- `PUT /app/api/calendar/plans/plan/{planId}/reapply-plan` — body `null`. The web app calls this after
+  calendar changes that should trigger Adaptive Training; progress via `GET /app/api/calendar/{memberId}/ff-progress`.
+
+Discipline ids for events: 0 climbing road race, 1 rolling road race, 2 time trial, 3 criterium,
+4 gran fondo, 5 cyclocross, 6 sprint tri, 7 olympic tri, 8 half tri, 9 full tri, 10 off-road tri,
+11 XC olympic, 12 XC marathon, 13 short track, 14 gravity, 15 enduro, 16 gravel. Race priority:
+1 C, 2 B, 3 A.
 
 ## Workout chart images
 

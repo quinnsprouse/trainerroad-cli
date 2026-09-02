@@ -9,22 +9,28 @@ const PROGRESSION_ZONE_META = {
   79: { zoneKey: "anaerobic", zoneLabel: "Anaerobic", sortOrder: 6 },
 };
 
+// From the web app's enum, checked against real annotations on 2026-09-02 (typeId 2 "Wisdom Teeth",
+// typeId 4 "Hiking Out West"). Earlier releases had 2 and 4 swapped.
 export const ANNOTATION_TYPE_LABELS = {
   1: "note",
-  2: "time-off",
+  2: "illness",
   3: "injury",
-  4: "illness",
-  9: "plan-marker",
+  4: "time-off",
+  5: "stage-race",
+  6: "custom-plan-start",
+  7: "custom-plan-week",
+  8: "custom-plan-block",
+  9: "plan-start",
+  10: "plan-week",
 };
 
-// Names an agent can pass to add-annotation --type. Rest days and "other" adjustments are not
-// creatable through this map yet because their type ids have not been confirmed.
+// Names an agent can pass to add-annotation --type. Only the four user-editable types.
 export const ANNOTATION_TYPE_IDS = {
   note: 1,
-  "time-off": 2,
+  illness: 2,
+  sick: 2,
   injury: 3,
-  illness: 4,
-  sick: 4,
+  "time-off": 4,
 };
 
 function endDateOnlyFrom(startDateOnly, durationSeconds) {
