@@ -3,6 +3,21 @@ import path from "node:path";
 import { normalizeTimeZone, toDateOnlyInTimeZone } from "./lib/timezone.mjs";
 
 const BASE_URL = "https://www.trainerroad.com";
+
+export class HttpError extends Error {
+  constructor(message, { status, statusText = "", path = "", payload = null } = {}) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+    this.statusText = statusText;
+    this.path = path;
+    this.payload = payload;
+  }
+}
+
+export function isHttpStatus(error, status) {
+  return error instanceof HttpError && error.status === status;
+}
 const APP_URL = `${BASE_URL}/app`;
 const DEFAULT_USER_AGENT =
   "trainerroad-cli/0.1 (unofficial; personal data export; +https://www.trainerroad.com)";
@@ -181,8 +196,9 @@ export class TrainerRoadClient {
         typeof payload === "object" && payload !== null
           ? JSON.stringify(payload)
           : String(payload);
-      throw new Error(
+      throw new HttpError(
         `Request failed: ${response.status} ${response.statusText} for ${urlOrPath} -> ${detail}`,
+        { status: response.status, statusText: response.statusText, path: urlOrPath, payload },
       );
     }
     return payload;
@@ -280,32 +296,32 @@ export class TrainerRoadClient {
     });
   }
 
-  async getAllUserPlans(usernameForPath) {
-    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(usernameForPath)}/all-user-plans`, {
+  async getAllUserPlans(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(memberId)}/all-user-plans`, {
       headers: {
-        "trainerroad-jsonformat": "camel-case",
-        referer: `${APP_URL}/career/${usernameForPath}`,
+        accept: "application/json",
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
     });
   }
 
-  async getCurrentCustomPlan(usernameForPath) {
+  async getCurrentCustomPlan(memberId, usernameForReferer) {
     return this.#requestJson(
-      `/app/api/plan-builder/current-custom-plan/${encodeURIComponent(usernameForPath)}`,
+      `/app/api/plan-builder/current-custom-plan/${encodeURIComponent(memberId)}`,
       {
         headers: {
-          "trainerroad-jsonformat": "camel-case",
-          referer: `${APP_URL}/career/${usernameForPath}`,
+          accept: "application/json",
+          referer: `${APP_URL}/career/${usernameForReferer}`,
         },
       },
     );
   }
 
-  async getPlanPhases(usernameForPath) {
-    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(usernameForPath)}/plan-phases`, {
+  async getPlanPhases(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(memberId)}/plan-phases`, {
       headers: {
-        "trainerroad-jsonformat": "camel-case",
-        referer: `${APP_URL}/career/${usernameForPath}`,
+        accept: "application/json",
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
     });
   }

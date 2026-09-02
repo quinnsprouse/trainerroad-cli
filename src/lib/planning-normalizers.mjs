@@ -141,6 +141,63 @@ export function compactCurrentPlan(plan) {
     autoUpdateApplied: plan.autoUpdateApplied ?? null,
     phaseCount: Array.isArray(plan.phases) ? plan.phases.length : 0,
     phases: Array.isArray(plan.phases) ? plan.phases.map((phase) => compactPlanPhase(phase)) : [],
+    source: plan.source ?? "current-custom-plan",
+  };
+}
+
+function dateWindowContains(start, end, dateOnly) {
+  if (!dateOnly) return false;
+  const startDateOnly = start ? toIsoDate(start) : null;
+  const endDateOnly = end ? toIsoDate(end) : null;
+  if (!startDateOnly || !endDateOnly) return false;
+  return startDateOnly <= dateOnly && dateOnly <= endDateOnly;
+}
+
+function phaseBelongsToPlan(phase, plan) {
+  if (phase?.customPlanId != null && plan?.id != null) {
+    return String(phase.customPlanId) === String(plan.id);
+  }
+  const phaseStart = phase?.start ? toIsoDate(phase.start) : null;
+  const phaseEnd = phase?.end ? toIsoDate(phase.end) : null;
+  return Boolean(phaseStart && phaseEnd && dateWindowContains(plan?.start, plan?.end, phaseStart) && dateWindowContains(plan?.start, plan?.end, phaseEnd));
+}
+
+/**
+ * Fallback for when /plan-builder/current-custom-plan is unavailable: pick the plan from
+ * all-user-plans whose start/end window contains today, and attach its plan-phases rows.
+ * Returns a raw-shaped plan object compatible with compactCurrentPlan, or null.
+ */
+export function deriveCurrentPlanFromPlans(plans, phases, todayDateOnly, { memberId = null } = {}) {
+  const planList = Array.isArray(plans) ? plans : [];
+  const phaseList = Array.isArray(phases) ? phases : [];
+  const activePlans = planList.filter((plan) => dateWindowContains(plan?.start, plan?.end, todayDateOnly));
+  if (activePlans.length === 0) return null;
+  // Prefer the most recently started plan when windows overlap.
+  activePlans.sort((a, b) => toIsoDate(b.start).localeCompare(toIsoDate(a.start)));
+  const plan = activePlans[0];
+
+  const planPhases = phaseList
+    .filter((phase) => phaseBelongsToPlan(phase, plan))
+    .sort((a, b) => (a?.start && b?.start ? toIsoDate(a.start).localeCompare(toIsoDate(b.start)) : 0));
+  const currentPhase =
+    planPhases.find((phase) => dateWindowContains(phase?.start, phase?.end, todayDateOnly)) ?? null;
+
+  return {
+    id: plan.id ?? null,
+    name: plan.name ?? null,
+    memberId: plan.memberId ?? memberId,
+    discipline: plan.discipline ?? null,
+    volume: plan.volume ?? null,
+    start: plan.start ?? null,
+    end: plan.end ?? null,
+    canEdit: plan.canEdit ?? null,
+    currentPhase: currentPhase?.type ?? plan.phase ?? null,
+    currentPhaseStart: currentPhase?.start ?? null,
+    currentPhaseEnd: currentPhase?.end ?? null,
+    plannedActivityGroupType: plan.plannedActivityGroupType ?? null,
+    autoUpdateApplied: plan.autoUpdateApplied ?? null,
+    phases: planPhases,
+    source: "all-user-plans",
   };
 }
 

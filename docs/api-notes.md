@@ -19,6 +19,25 @@ Date captured: 2026-02-23
 
 Auth is cookie-based. Local storage did not contain primary auth tokens.
 
+> **2026-09-02:** `/app/login` is now a React single-page app with no server-rendered form, so the
+> flow above no longer works (the CLI fails with "Could not locate __RequestVerificationToken").
+> The SPA authenticates with `POST /app/api/login/login` (`application/json`) and a body of
+> `{"username": "...", "password": "...", "returnUrl": null}`. A bad credential returns HTTP 200
+> with `{"redirectUrl": null, "success": false}`. Success handling has not been captured yet.
+
+## Plan-builder endpoints (authenticated)
+
+Plan-builder paths are keyed by the numeric `memberId`, not the username. Username-keyed paths 404.
+Send `referer: https://www.trainerroad.com/app/career/{username}`.
+
+- `GET /app/api/plan-builder/{memberId}/all-user-plans` — 200. Array of plan summaries with
+  `id`, `name`, `discipline`, `volume`, `phase`, `start`, `end`, `isAdHoc`, `plannedActivityGroupId`.
+- `GET /app/api/plan-builder/{memberId}/plan-phases` — 200. Array of phase rows with `id`,
+  `customPlanId`, `type`, `volume`, `planId`, `planName`, `start`, `end`, `isMasters`, `isPolarized`.
+- `GET /app/api/plan-builder/current-custom-plan/{memberId}` — 404 for at least some members
+  (also 404 as `/{memberId}/current-custom-plan`). The CLI treats this as "no explicit current plan"
+  and derives the current plan from `all-user-plans` (window containing today) plus its `plan-phases`.
+
 ## Core data endpoints
 
 - `GET /app/api/member-info`
