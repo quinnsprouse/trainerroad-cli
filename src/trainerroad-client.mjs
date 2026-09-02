@@ -181,9 +181,13 @@ export class TrainerRoadClient {
         typeof payload === "object" && payload !== null
           ? JSON.stringify(payload)
           : String(payload);
-      throw new Error(
+      const error = new Error(
         `Request failed: ${response.status} ${response.statusText} for ${urlOrPath} -> ${detail}`,
       );
+      error.status = response.status;
+      error.statusText = response.statusText;
+      error.path = urlOrPath;
+      throw error;
     }
     return payload;
   }
@@ -280,32 +284,32 @@ export class TrainerRoadClient {
     });
   }
 
-  async getAllUserPlans(usernameForPath) {
-    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(usernameForPath)}/all-user-plans`, {
+  async getAllUserPlans(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(memberId)}/all-user-plans`, {
       headers: {
         "trainerroad-jsonformat": "camel-case",
-        referer: `${APP_URL}/career/${usernameForPath}`,
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
     });
   }
 
-  async getCurrentCustomPlan(usernameForPath) {
+  async getCurrentCustomPlan(memberId, usernameForReferer) {
     return this.#requestJson(
-      `/app/api/plan-builder/current-custom-plan/${encodeURIComponent(usernameForPath)}`,
+      `/app/api/plan-builder/current-custom-plan/${encodeURIComponent(memberId)}`,
       {
         headers: {
           "trainerroad-jsonformat": "camel-case",
-          referer: `${APP_URL}/career/${usernameForPath}`,
+          referer: `${APP_URL}/career/${usernameForReferer}`,
         },
       },
     );
   }
 
-  async getPlanPhases(usernameForPath) {
-    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(usernameForPath)}/plan-phases`, {
+  async getPlanPhases(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(memberId)}/plan-phases`, {
       headers: {
         "trainerroad-jsonformat": "camel-case",
-        referer: `${APP_URL}/career/${usernameForPath}`,
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
     });
   }
