@@ -264,6 +264,61 @@ export const COMMANDS = {
       "trainerroad-cli switch-workout --id 123456 --mode outside --json",
     ],
   },
+  "add-event": {
+    summary:
+      "Add a race or event to the calendar with discipline, priority, duration, and a TSS or intensity estimate. Remove it later with remove-workout (private mode).",
+    usage: [
+      "trainerroad-cli add-event --name <text> --date YYYY-MM-DD --discipline <name|id> --duration <minutes> (--tss <number> | --intensity <1-10>) [--priority A|B|C] [--notes <text>] [--dry-run] [--json|--jsonl]",
+    ],
+    examples: [
+      "trainerroad-cli add-event --name \"Black Fork\" --date 2027-05-01 --discipline gravel --priority A --duration 300 --tss 340 --dry-run",
+      "trainerroad-cli add-event --name \"Tuesday crit\" --date 2026-10-06 --discipline criterium --priority C --duration 60 --intensity 9 --json",
+    ],
+  },
+  "remove-workout": {
+    summary:
+      "Remove a planned workout or event from the calendar by planned-activity id. TrainerRoad may rebuild the plan around the gap (private mode).",
+    usage: ["trainerroad-cli remove-workout --id <planned-activity-id> [--dry-run] [--json|--jsonl]"],
+    examples: [
+      "trainerroad-cli remove-workout --id 05a68215-0fd5-431e-ba3f-b3bf01210c29 --dry-run",
+      "trainerroad-cli remove-workout --id 05a68215-0fd5-431e-ba3f-b3bf01210c29 --json",
+    ],
+  },
+  "workout-image": {
+    summary: "Save a workout's power-profile chart as PNG (default) or SVG (private mode).",
+    usage: [
+      "trainerroad-cli workout-image --id <workout-id> [--file <path>] [--format png|svg] [--width <px>] [--background <css-color>] [--json]",
+    ],
+    examples: [
+      "trainerroad-cli workout-image --id 1592808 --file fishers.png",
+      "trainerroad-cli workout-image --id 1592808 --format svg --file fishers.svg --json",
+    ],
+  },
+  "annotation-details": {
+    summary: "Fetch one calendar annotation with its title and notes (private mode).",
+    usage: ["trainerroad-cli annotation-details --id <annotation-id> [--full] [--json|--jsonl]"],
+    examples: ["trainerroad-cli annotation-details --id 1818fb12-7294-4a98-b494-b4b90160edc1 --json"],
+  },
+  "add-annotation": {
+    summary:
+      "Add a calendar annotation: time off, illness, injury, or a note. Multi-day via --days or --end-date. TrainerRoad may adapt nearby workouts (private mode).",
+    usage: [
+      "trainerroad-cli add-annotation --type time-off|illness|injury|note --date YYYY-MM-DD [--days <count> | --end-date YYYY-MM-DD] [--title <text>] [--notes <text>] [--dry-run] [--json|--jsonl]",
+    ],
+    examples: [
+      "trainerroad-cli add-annotation --type time-off --date 2026-09-21 --days 3 --title \"Travel\" --dry-run",
+      "trainerroad-cli add-annotation --type illness --date 2026-09-21 --end-date 2026-09-23 --notes \"Head cold\" --json",
+      "trainerroad-cli add-annotation --type note --date 2026-09-21 --title \"New saddle\" --json",
+    ],
+  },
+  "remove-annotation": {
+    summary: "Remove a calendar annotation by id. No-op if it is already gone (private mode).",
+    usage: ["trainerroad-cli remove-annotation --id <annotation-id> [--dry-run] [--json|--jsonl]"],
+    examples: [
+      "trainerroad-cli remove-annotation --id 1818fb12-7294-4a98-b494-b4b90160edc1 --dry-run",
+      "trainerroad-cli remove-annotation --id 1818fb12-7294-4a98-b494-b4b90160edc1 --json",
+    ],
+  },
   logout: {
     summary: "Clear local persisted session.",
     usage: ["trainerroad-cli logout"],
@@ -326,6 +381,12 @@ export const COMMAND_REQUIRED_FLAGS = {
   "move-workout": ["id", "to"],
   "replace-workout": ["id", "alternate-id"],
   "switch-workout": ["id", "mode"],
+  "add-event": ["name", "date", "discipline", "duration"],
+  "remove-workout": ["id"],
+  "workout-image": ["id"],
+  "annotation-details": ["id"],
+  "add-annotation": ["type", "date"],
+  "remove-annotation": ["id"],
 };
 
 export const FLAG_DETAILS = {
@@ -438,7 +499,23 @@ export const FLAG_DETAILS = {
     placeholder: "<count>",
     description: "Upstream workout library page size.",
   },
-  id: { placeholder: "<id>", description: "Workout, planned activity, or record identifier." },
+  id: { placeholder: "<id>", description: "Workout, planned activity, annotation, or record identifier." },
+  name: { placeholder: "<text>", description: "Event name shown on the calendar." },
+  discipline: {
+    placeholder: "<name|id>",
+    description:
+      "Event discipline: gravel, criterium, time-trial, gran-fondo, climbing-road-race, rolling-road-race, cyclocross, xc-olympic, xc-marathon, short-track, gravity, enduro, or a triathlon type; numeric ids accepted.",
+  },
+  priority: { placeholder: "A|B|C", description: "Race priority. A drives the plan, C is a training race (default B)." },
+  tss: { placeholder: "<number>", description: "Expected TSS for the event. Use this or --intensity." },
+  intensity: { placeholder: "<1-10>", description: "Expected intensity on TrainerRoad's 1-10 scale. Use this or --tss." },
+  file: { placeholder: "<path>", description: "Destination file for the image (default workout-<id>.png)." },
+  format: { placeholder: "png|svg", description: "Image format. Inferred from --file extension when omitted." },
+  width: { placeholder: "<px>", description: "PNG width in pixels (default 1200)." },
+  background: { placeholder: "<css-color>", description: "PNG background colour (default #1c1c1c)." },
+  title: { placeholder: "<text>", description: "Annotation title shown on the calendar. Defaults to the type name." },
+  notes: { placeholder: "<text>", description: "Free-text notes stored with the annotation." },
+  "color-id": { placeholder: "<id>", description: "TrainerRoad annotation colour id (default 2)." },
   "include-chart": {
     placeholder: "true|false",
     description: "Include workout chart/sample data in workout-details.",
@@ -483,6 +560,38 @@ function mergeFlagGroups(...groups) {
       .filter(Boolean),
   );
 }
+
+// Per-command overrides for flags whose meaning differs from the shared FLAG_DETAILS entry.
+export const COMMAND_FLAG_DETAILS = {
+  "add-annotation": {
+    type: {
+      placeholder: "time-off|illness|injury|note",
+      description: "Annotation type. Also accepts a numeric TrainerRoad typeId.",
+    },
+    date: { placeholder: "YYYY-MM-DD", description: "First day of the annotation." },
+    days: { placeholder: "<count>", description: "Number of days the annotation covers (default 1)." },
+    "end-date": { placeholder: "YYYY-MM-DD", description: "Last day of the annotation, inclusive. Overrides --days." },
+  },
+  "annotation-details": {
+    id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
+    full: { description: "Include the raw upstream annotation payload." },
+  },
+  "workout-image": {
+    id: { placeholder: "<workout-id>", description: "Library workout id (from workout-library, workout-details, or future --details)." },
+  },
+  "remove-workout": {
+    id: { placeholder: "<planned-activity-id>", description: "Planned activity id from `future --details` or `events`." },
+  },
+  "add-event": {
+    date: { placeholder: "YYYY-MM-DD", description: "Event date." },
+    duration: { placeholder: "<minutes>", description: "Expected event duration in minutes." },
+    notes: { placeholder: "<text>", description: "Free-text description stored with the event." },
+    full: { description: "Include TrainerRoad's raw create response." },
+  },
+  "remove-annotation": {
+    id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
+  },
+};
 
 const SHARED_FLAGS = {
   help: ["help"],
@@ -763,6 +872,58 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.credentials,
     SHARED_FLAGS.writeSafety,
     ["id", "mode"],
+  ),
+  "add-event": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["name", "date", "discipline", "priority", "duration", "tss", "intensity", "notes", "full"],
+  ),
+  "remove-workout": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["id"],
+  ),
+  "workout-image": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.json,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "file", "format", "width", "background"],
+  ),
+  "annotation-details": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "full"],
+  ),
+  "add-annotation": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["type", "date", "days", "end-date", "title", "notes", "color-id"],
+  ),
+  "remove-annotation": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["id"],
   ),
   logout: mergeFlagGroups(SHARED_FLAGS.help, SHARED_FLAGS.output, SHARED_FLAGS.session),
 };

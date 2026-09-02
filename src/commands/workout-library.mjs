@@ -115,6 +115,7 @@ export function summarizeWorkout(workout) {
     firstPublishDate: workout.firstPublishDate ?? null,
     indoorAlternativeId: workout.indoorAlternativeId ?? null,
     energyKj: workout.kj ?? null,
+    chartUrl: workout.picUrl ?? null,
     goal: stripHtml(workout.goalDescription),
     description: stripHtml(workout.workoutDescription),
   };

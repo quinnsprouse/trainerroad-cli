@@ -2,22 +2,118 @@
 
 Date captured: 2026-02-23
 
-## Authentication flow
+## Authentication flow (current, captured 2026-09-02)
 
-1. `GET /app/login?ReturnUrl=%2Fapp%2Fcareer%2F{username}`
-2. Parse hidden form inputs:
-   - `ReturnUrl`
-   - `__RequestVerificationToken`
-3. `POST /app/login` (`application/x-www-form-urlencoded`) with:
-   - `Username`
-   - `Password`
-   - `ReturnUrl`
-   - `__RequestVerificationToken`
-4. Success behavior:
-   - HTTP `302` redirect to `/app/career/{username}`
-   - `Set-Cookie: SharedTrainerRoadAuth=...`
+`/app/login` is a React single-page app. It authenticates with one JSON call:
+
+- `POST /app/api/login/login` with `content-type: application/json` and the usual
+  `trainerroad-jsonformat: camel-case` header.
+- Body: `{"username": "<username or email>", "password": "...", "returnUrl": "/app/career/<username>" | null}`
+- Bad credentials: HTTP 200 with `{"success": false, "redirectUrl": null}`.
+- Success: HTTP 200 with `{"success": true, "redirectUrl": "..."}` and `Set-Cookie: SharedTrainerRoadAuth=...`.
+  The web app then navigates to `redirectUrl`.
 
 Auth is cookie-based. Local storage did not contain primary auth tokens.
+
+### Legacy form flow (worked until mid-2026)
+
+The CLI keeps this as a fallback in case the JSON route goes away.
+
+1. `GET /app/login?ReturnUrl=%2Fapp%2Fcareer%2F{username}`
+2. Parse hidden form inputs `ReturnUrl` and `__RequestVerificationToken`.
+3. `POST /app/login` (`application/x-www-form-urlencoded`) with `Username`, `Password`, `ReturnUrl`,
+   `__RequestVerificationToken`.
+4. Success: HTTP `302` to `/app/career/{username}` plus `Set-Cookie: SharedTrainerRoadAuth=...`.
+
+## Response casing
+
+The API returns PascalCase keys (`MemberId`, `Start`) unless the request carries
+`trainerroad-jsonformat: camel-case`. The web app sends that header on every call, and so does the
+CLI. If a payload still comes back PascalCase the client lower-cases the first letter of each key.
+
+## Member-id vs username paths
+
+Several endpoints that used to accept a username now 404 on it and want the numeric `memberId`.
+Confirmed 2026-09-02 (member 211199):
+
+| Path | username | memberId |
+| --- | --- | --- |
+| `/app/api/plan-builder/{id}/all-user-plans` | 404 | 200 |
+| `/app/api/plan-builder/{id}/plan-phases` | 404 | 200 |
+| `/app/api/plan-builder/current-custom-plan/{id}` | 404 | 404 |
+| `/app/api/career/{id}/new` | 404 | 200 |
+| `/app/api/tss/{id}` (public) | 200 | 404 |
+
+Send `referer: https://www.trainerroad.com/app/career/{username}` on member-keyed calls.
+
+## Plan-builder endpoints (authenticated)
+
+The web calendar loads only `all-user-plans` and `plan-phases`; it never calls `current-custom-plan`.
+
+- `GET /app/api/plan-builder/{memberId}/all-user-plans` — array of plan summaries:
+  `id` (GUID), `name`, `discipline` (int), `volume` (int), `phase`, `start`, `end` (local date-times,
+  no offset), `isAdHoc`, `plannedActivityGroupId`, `inputJson` (the plan-builder wizard input).
+- `GET /app/api/plan-builder/{memberId}/plan-phases` — array of phase rows: `id`, `customPlanId`
+  (matches a plan `id`), `type` (int), `volume`, `planId`, `planName` (e.g. "Sustained Power Build"),
+  `start`, `end` (ends at `23:59:59.999`), `isMasters`, `isPolarized`. A phase can start a few days
+  before its plan's `start`, so match phases to plans by `customPlanId`, not by date.
+- `GET /app/api/plan-builder/current-custom-plan/{memberId}` — 404. The CLI treats this as "no
+  explicit current plan" and derives it from the two calls above (plan window containing today).
+
+## Annotation endpoints (authenticated, confirmed 2026-09-02)
+
+Annotations are the calendar's time off, illness, injury, and note entries. Timeline rows carry
+only `id`, `typeId`, `date`, `duration`, `groupId`, `updated`; the title and notes need the detail call.
+
+- `GET /app/api/react-calendar/annotation/{annotationId}` — `id`, `date` ({year,month,day}),
+  `timeOfDay`, `duration` (seconds, whole days), `title`, `text`, `styleIndex`, `typeId`, `colorId`,
+  `colorHex`, `plannedActivityGroupId`.
+- `POST /app/api/calendar/annotations` — JSON body
+  `{"date":"YYYY-MM-DD","timeOfDay":null,"duration":<days*86400>,"title":"...","text":"...","typeId":<n>,"colorId":2}`.
+  `date` must be a plain date string; a `{year,month,day}` object is rejected with 400. Responds 204
+  with no body, so the new id has to be found by diffing the timeline.
+- `PUT /app/api/calendar/annotations/{annotationId}` — same body as create (from the web bundle, not
+  yet exercised by the CLI).
+- `PUT /app/api/calendar/annotations/{annotationId}/move` — `{"newDate":"YYYY-MM-DD","oldDate":"YYYY-MM-DD"}`.
+- `DELETE /app/api/calendar/annotations/{annotationId}` — 204. `GET` on that path is 405.
+- `DELETE /app/api/react-calendar/annotation/{annotationId}` — the variant the web app uses from its
+  "delete and adapt" modal, followed by `PUT /app/api/calendar/plans/plan/{planId}/reapply-plan`.
+- Type ids (web-app enum, checked against real annotations 2026-09-02): 1 note, 2 illness, 3 injury,
+  4 time-off, 5 stage-race, 6 custom-plan-start, 7 custom-plan-week, 8 custom-plan-block,
+  9 plan-start, 10 plan-week. Only 1 to 4 are user-editable. Earlier notes here had 2 and 4 swapped.
+
+## Event and planned-activity write endpoints (from the web bundle, 2026-09-02)
+
+Base: `/app/api/calendar/plannedactivities`. Events are planned activities with `activityType` 1.
+
+- `POST .../event` — `{"customPlanId":null,"name":"...","date":"YYYY-MM-DD","time":null,"discipline":<n>,"duration":<seconds>,"notes":"","racePriority":1|2|3,"stressEstimateType":1|2,"stressEstimateValue":<intensity or null>,"tss":<tss or null>,"manuallyCompleted":false}`.
+  TSS mode: `stressEstimateType` 1 with `tss` set. Intensity mode: `stressEstimateType` 2 with `stressEstimateValue`.
+- `PUT .../{eventId}/event` — same body.
+- `DELETE .../{plannedActivityId}` — 204 for workouts and events alike. Confirmed live on a throwaway
+  copy of a workout; the record 404s afterwards.
+- `POST .../workout` — `{"date":"YYYY-MM-DD","isManualComplete":false,"recommendationReason":37,"time":null,"type":0|1|5,"workoutId":<id>}` (type 0 inside, 1 outside, 5 group workout; 37 = athlete-selected).
+- `POST .../ai-workout` — `{"date","time","duration":<minutes>,"isManualComplete":false,"maxDynamicDuration","zone","profileId","type"}`.
+- `PUT .../{id}/skip` (body `null`), `PUT .../{id}/pin` (`{"pinned":true}`), `POST .../{id}/mark-manually-complete` (`{"completed":true}`), `POST .../{id}/copy/{YYYY-MM-DD}`.
+- `PUT /app/api/calendar/plans/plan/{planId}/reapply-plan` — body `null`. The web app calls this after
+  calendar changes that should trigger Adaptive Training; progress via `GET /app/api/calendar/{memberId}/ff-progress`.
+
+Discipline ids for events: 0 climbing road race, 1 rolling road race, 2 time trial, 3 criterium,
+4 gran fondo, 5 cyclocross, 6 sprint tri, 7 olympic tri, 8 half tri, 9 full tri, 10 off-road tri,
+11 XC olympic, 12 XC marathon, 13 short track, 14 gravity, 15 enduro, 16 gravel. Race priority:
+1 C, 2 B, 3 A.
+
+## Workout chart images
+
+`GET /app/api/workouts/{workoutId}/summary` and `POST /app/api/workouts/by-id` both return `picUrl`,
+a public Azure blob URL ending in `chart.svg` (the power-profile graphic, 381x254 viewBox, dark
+background). The blob needs no cookies. The CLI rasterises it with `@resvg/resvg-js`.
+
+## Adaptive Training side effects
+
+TrainerRoad rebuilds upcoming planned workouts in response to calendar changes: deleting or adding
+a workout, and adding time off, illness, or injury. Planned activities expose
+`recommendationReason`, `adaptationLocked`, `adaptationAltered`, and `adaptationReason`. Re-read
+the timeline after any write before reasoning about the plan.
 
 ## Core data endpoints
 
@@ -42,7 +138,7 @@ Auth is cookie-based. Local storage did not contain primary auth tokens.
 
 - `GET /app/api/career/{memberId}/levels`
   - Returns progression-level object keyed by progression ID and timestamp.
-- `GET /app/api/career/{username}/new`
+- `GET /app/api/career/{memberId}/new` (username 404s since mid-2026)
   - Returns career summary fields including `ftp`, `weightKg`, and plan flags.
 - `GET /app/api/ai-ftp-detection/can-use-ai-ftp/{memberId}`
   - Returns AI FTP eligibility (`can`, `reason`) and additional detection data.
@@ -50,7 +146,7 @@ Auth is cookie-based. Local storage did not contain primary auth tokens.
   - Returns AI FTP failure status code.
 - `GET /app/api/onboarding/power-ranking?memberId={memberId}`
   - Returns power percentile rankings by duration.
-- `POST /app/api/personal-records/for-date-range/{memberId}?rowType=...&indoorOnly=...`
+- `POST /app/api/personal-records/{memberId}?rowType=...&indoorOnly=...` (was `/personal-records/for-date-range/{memberId}` until mid-2026; the CLI falls back to it on 404)
   - Requires JSON body like:
     - `[{"Slot":1,"StartDate":"2013-05-10","EndDate":"2026-02-23"}]`
   - Returns `results[0].personalRecords`.

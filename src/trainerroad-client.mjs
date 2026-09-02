@@ -6,6 +6,51 @@ const BASE_URL = "https://www.trainerroad.com";
 const APP_URL = `${BASE_URL}/app`;
 const DEFAULT_USER_AGENT =
   "trainerroad-cli/0.1 (unofficial; personal data export; +https://www.trainerroad.com)";
+const JSON_FORMAT_HEADER = "trainerroad-jsonformat";
+const AUTH_COOKIE = "SharedTrainerRoadAuth";
+
+function lowerFirst(key) {
+  return key.length > 0 ? key[0].toLowerCase() + key.slice(1) : key;
+}
+
+export function looksPascalCase(value) {
+  const sample = Array.isArray(value) ? value.find((item) => item && typeof item === "object") : value;
+  if (!sample || typeof sample !== "object") return false;
+  const keys = Object.keys(sample);
+  return keys.length > 0 && keys.every((key) => /^[A-Z]/.test(key));
+}
+
+/**
+ * TrainerRoad serialises with PascalCase keys unless the `trainerroad-jsonformat: camel-case`
+ * header is honoured, and some endpoints (personal records) nest PascalCase objects inside a
+ * camelCase envelope even then. Every consumer in this CLI expects camelCase, so each object whose
+ * keys all start with a capital gets its keys lower-cased, at every depth. camelCase passes through.
+ */
+export function camelizeKeys(value) {
+  if (Array.isArray(value)) return value.map((item) => camelizeKeys(item));
+  if (value === null || typeof value !== "object") return value;
+  const rename = looksPascalCase(value);
+  const out = {};
+  for (const [key, inner] of Object.entries(value)) {
+    out[rename ? lowerFirst(key) : key] = camelizeKeys(inner);
+  }
+  return out;
+}
+
+export class HttpError extends Error {
+  constructor(message, { status, statusText = "", path = "", payload = null } = {}) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+    this.statusText = statusText;
+    this.path = path;
+    this.payload = payload;
+  }
+}
+
+export function isHttpStatus(error, status) {
+  return error instanceof HttpError && error.status === status;
+}
 
 function ensureLeadingSlash(value) {
   if (!value.startsWith("/")) return `/${value}`;
@@ -151,6 +196,8 @@ export class TrainerRoadClient {
     const headers = new Headers(options.headers ?? {});
     headers.set("user-agent", this.userAgent);
     if (!headers.has("accept")) headers.set("accept", "application/json, text/plain, */*");
+    // The web app sends this on every API call; without it responses come back PascalCase.
+    if (!headers.has(JSON_FORMAT_HEADER)) headers.set(JSON_FORMAT_HEADER, "camel-case");
     const cookieHeader = this.jar.cookieHeader();
     if (cookieHeader) headers.set("cookie", cookieHeader);
 
@@ -181,11 +228,12 @@ export class TrainerRoadClient {
         typeof payload === "object" && payload !== null
           ? JSON.stringify(payload)
           : String(payload);
-      throw new Error(
+      throw new HttpError(
         `Request failed: ${response.status} ${response.statusText} for ${urlOrPath} -> ${detail}`,
+        { status: response.status, statusText: response.statusText, path: urlOrPath, payload },
       );
     }
-    return payload;
+    return camelizeKeys(payload);
   }
 
   async login({
@@ -198,7 +246,50 @@ export class TrainerRoadClient {
     }
 
     const normalizedReturnPath = ensureLeadingSlash(returnPath);
-    const loginPath = `/app/login?ReturnUrl=${encodeURIComponent(normalizedReturnPath)}`;
+
+    // The current web app authenticates through a JSON endpoint. The older server-rendered form
+    // flow is kept as a fallback so the CLI keeps working if that route disappears again.
+    const jsonResult = await this.#loginJson({ username, password, returnPath: normalizedReturnPath });
+    if (jsonResult.handled) return this.#finishLogin(jsonResult.redirect);
+
+    return this.#loginLegacyForm({ username, password, returnPath: normalizedReturnPath });
+  }
+
+  async #loginJson({ username, password, returnPath }) {
+    const loginPath = "/app/api/login/login";
+    const response = await this.#request(loginPath, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: BASE_URL,
+        referer: `${APP_URL}/login`,
+      },
+      body: JSON.stringify({ username, password, returnUrl: returnPath }),
+      redirect: "manual",
+    });
+    const text = await response.text();
+    let payload;
+    try {
+      payload = camelizeKeys(JSON.parse(text));
+    } catch {
+      return { handled: false };
+    }
+    if (response.status === 404 || response.status === 405 || payload === null || typeof payload !== "object") {
+      return { handled: false };
+    }
+    if (payload.success === true || this.jar.has(AUTH_COOKIE)) {
+      return { handled: true, redirect: payload.redirectUrl ?? "" };
+    }
+    if (payload.success === false) {
+      throw new Error("Login failed: TrainerRoad rejected the username or password.");
+    }
+    throw new Error(
+      `Login failed: unexpected response from ${loginPath} (status ${response.status}): ${text.slice(0, 300)}`,
+    );
+  }
+
+  async #loginLegacyForm({ username, password, returnPath }) {
+    const loginPath = `/app/login?ReturnUrl=${encodeURIComponent(returnPath)}`;
 
     const loginPage = await this.#request(loginPath, {
       method: "GET",
@@ -213,7 +304,9 @@ export class TrainerRoadClient {
     const returnUrlMatch = html.match(/id="ReturnUrl"\s+name="ReturnUrl"\s+type="hidden"\s+value="([^"]+)"/i);
 
     if (!tokenMatch) {
-      throw new Error("Could not locate __RequestVerificationToken on login page.");
+      throw new Error(
+        "Login failed: the JSON login API did not answer and the login page has no __RequestVerificationToken form. TrainerRoad may have changed its login flow again.",
+      );
     }
     if (!returnUrlMatch) {
       throw new Error("Could not locate ReturnUrl hidden input on login page.");
@@ -242,20 +335,21 @@ export class TrainerRoadClient {
       throw new Error(`Login did not redirect. Status=${response.status}. Body preview=${body.slice(0, 300)}`);
     }
 
-    if (!this.jar.has("SharedTrainerRoadAuth")) {
-      throw new Error("Login redirect succeeded, but SharedTrainerRoadAuth cookie is missing.");
-    }
+    return this.#finishLogin(response.headers.get("location") ?? "");
+  }
 
-    const location = response.headers.get("location") ?? "";
+  async #finishLogin(redirect) {
+    if (!this.jar.has(AUTH_COOKIE)) {
+      throw new Error(`Login succeeded, but the ${AUTH_COOKIE} cookie is missing.`);
+    }
     await this.saveSession({
       authenticatedAt: new Date().toISOString(),
-      lastLoginRedirect: location,
+      lastLoginRedirect: redirect,
     });
-
     return {
       ok: true,
-      redirect: location,
-      hasAuthCookie: this.jar.has("SharedTrainerRoadAuth"),
+      redirect,
+      hasAuthCookie: this.jar.has(AUTH_COOKIE),
     };
   }
 
@@ -271,6 +365,112 @@ export class TrainerRoadClient {
     });
   }
 
+  // Public asset fetch (workout chart SVGs live on a CDN, no cookies needed).
+  async fetchText(url) {
+    const response = await fetch(url, { headers: { "user-agent": this.userAgent } });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(`Request failed: ${response.status} ${response.statusText} for ${url}`, {
+        status: response.status,
+        statusText: response.statusText,
+        path: url,
+        payload: text,
+      });
+    }
+    return text;
+  }
+
+  // Body shape: see docs/api-notes.md "Event and planned-activity write endpoints".
+  async createEvent(event, usernameForReferer) {
+    const path = "/app/api/calendar/plannedactivities/event";
+    const response = await this.#request(path, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+      body: JSON.stringify(event),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(`Request failed: ${response.status} ${response.statusText} for ${path} -> ${text}`, {
+        status: response.status,
+        statusText: response.statusText,
+        path,
+        payload: text,
+      });
+    }
+    try {
+      return camelizeKeys(JSON.parse(text));
+    } catch {
+      return { ok: true, status: response.status, raw: text };
+    }
+  }
+
+  async deletePlannedActivity(plannedActivityId, usernameForReferer) {
+    const path = `/app/api/calendar/plannedactivities/${encodeURIComponent(plannedActivityId)}`;
+    const response = await this.#request(path, {
+      method: "DELETE",
+      headers: { referer: `${APP_URL}/calendar/${usernameForReferer}` },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(
+        `Request failed: ${response.status} ${response.statusText} for ${path} -> ${text}`,
+        { status: response.status, statusText: response.statusText, path, payload: text },
+      );
+    }
+    return { ok: true, status: response.status };
+  }
+
+  async getAnnotation(annotationId, usernameForReferer) {
+    return this.#requestJson(`/app/api/react-calendar/annotation/${encodeURIComponent(annotationId)}`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+    });
+  }
+
+  // Body: { date: "YYYY-MM-DD", timeOfDay, duration (seconds, whole days), title, text, typeId, colorId }.
+  // Responds 204 with no body; the new id only shows up in the timeline afterwards.
+  async createAnnotation(annotation, usernameForReferer) {
+    const response = await this.#request("/app/api/calendar/annotations", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+      body: JSON.stringify(annotation),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(
+        `Request failed: ${response.status} ${response.statusText} for create annotation -> ${text}`,
+        { status: response.status, statusText: response.statusText, path: "/app/api/calendar/annotations", payload: text },
+      );
+    }
+    return { ok: true, status: response.status };
+  }
+
+  async deleteAnnotation(annotationId, usernameForReferer) {
+    const path = `/app/api/calendar/annotations/${encodeURIComponent(annotationId)}`;
+    const response = await this.#request(path, {
+      method: "DELETE",
+      headers: { referer: `${APP_URL}/calendar/${usernameForReferer}` },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(
+        `Request failed: ${response.status} ${response.statusText} for ${path} -> ${text}`,
+        { status: response.status, statusText: response.statusText, path, payload: text },
+      );
+    }
+    return { ok: true, status: response.status };
+  }
+
   async getWeightHistory(memberId, usernameForReferer) {
     return this.#requestJson(`/app/api/weight-history/${memberId}/all`, {
       headers: {
@@ -280,39 +480,42 @@ export class TrainerRoadClient {
     });
   }
 
-  async getAllUserPlans(usernameForPath) {
-    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(usernameForPath)}/all-user-plans`, {
+  async getAllUserPlans(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(memberId)}/all-user-plans`, {
       headers: {
         "trainerroad-jsonformat": "camel-case",
-        referer: `${APP_URL}/career/${usernameForPath}`,
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
     });
   }
 
-  async getCurrentCustomPlan(usernameForPath) {
+  async getCurrentCustomPlan(memberId, usernameForReferer) {
     return this.#requestJson(
-      `/app/api/plan-builder/current-custom-plan/${encodeURIComponent(usernameForPath)}`,
+      `/app/api/plan-builder/current-custom-plan/${encodeURIComponent(memberId)}`,
       {
         headers: {
           "trainerroad-jsonformat": "camel-case",
-          referer: `${APP_URL}/career/${usernameForPath}`,
+          referer: `${APP_URL}/career/${usernameForReferer}`,
         },
       },
     );
   }
 
-  async getPlanPhases(usernameForPath) {
-    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(usernameForPath)}/plan-phases`, {
+  async getPlanPhases(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/plan-builder/${encodeURIComponent(memberId)}/plan-phases`, {
       headers: {
         "trainerroad-jsonformat": "camel-case",
-        referer: `${APP_URL}/career/${usernameForPath}`,
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
     });
   }
 
-  async getCareerSummary(usernameForPath) {
-    return this.#requestJson(`/app/api/career/${encodeURIComponent(usernameForPath)}/new`, {
-      headers: { "trainerroad-jsonformat": "camel-case" },
+  async getCareerSummary(memberId, usernameForReferer) {
+    return this.#requestJson(`/app/api/career/${memberId}/new`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/career/${usernameForReferer}`,
+      },
     });
   }
 
@@ -397,18 +600,25 @@ export class TrainerRoadClient {
         EndDate: endDate,
       },
     ];
-    return this.#requestJson(
-      `/app/api/personal-records/for-date-range/${memberId}?${params.toString()}`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "trainerroad-jsonformat": "camel-case",
-          referer: `${APP_URL}/career/${usernameForReferer}`,
-        },
-        body: JSON.stringify(payload),
+    const options = {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
-    );
+      body: JSON.stringify(payload),
+    };
+    // The web app dropped the /for-date-range segment in 2026; keep the old path as a fallback.
+    try {
+      return await this.#requestJson(`/app/api/personal-records/${memberId}?${params.toString()}`, options);
+    } catch (error) {
+      if (!isHttpStatus(error, 404)) throw error;
+      return this.#requestJson(
+        `/app/api/personal-records/for-date-range/${memberId}?${params.toString()}`,
+        options,
+      );
+    }
   }
 
   async getTimeline(memberId, usernameForReferer) {

@@ -26,6 +26,10 @@ It can also perform a small set of verified calendar writes for planned workouts
 - list TrainerRoad alternate workout options
 - replace a workout with a specific alternate
 - switch a workout between inside and outside
+- remove a planned workout or event
+- add a race or event with discipline, priority, and a TSS or intensity estimate
+- add and remove calendar annotations: time off, illness, injury, notes
+- save a workout's power-profile chart as PNG or SVG
 
 ## Agent-Friendly Behavior
 
@@ -34,6 +38,30 @@ It can also perform a small set of verified calendar writes for planned workouts
 - Command help includes concrete examples and flag descriptions.
 - Write commands support `--dry-run` previews.
 - Common retry cases are idempotent no-ops instead of duplicate calendar writes.
+- Every write returns `before`/`after` (or the created record) so the caller can verify without a second call.
+
+## How TrainerRoad Reacts To Calendar Changes
+
+TrainerRoad's Adaptive Training treats the calendar as input. Agents managing an athlete's plan should expect:
+
+- Removing or skipping a planned workout can cause TrainerRoad to rebuild the upcoming plan around the gap.
+- Adding a workout, or marking time off, illness, or injury, can likewise shift the surrounding planned workouts.
+- Planned workouts carry `recommendationReason`, `adaptationLocked`, and `adaptationAltered` fields that show whether TrainerRoad chose or altered them.
+- After any write, re-read `future --days 14 --details` before deciding the next step. Do not assume the calendar looks the way it did before the write.
+
+Write commands echo this in an `adaptiveTraining` field so it is visible in machine-readable output.
+
+## Reading The Athlete's Situation
+
+A useful order for an agent building a picture of how training is going:
+
+1. `whoami` for FTP, weight, and timezone.
+2. `plan --view current` for the plan, its phases, and the phase the athlete is in today.
+3. `past --days 28 --details` and `future --days 14 --details` for what happened and what is scheduled.
+4. `levels` for progression levels by zone, and `ftp-prediction` for where FTP is heading.
+5. `annotations --from <date>` for time off, illness, and injury, and `annotation-details --id` for the notes behind them.
+6. `events` for upcoming races.
+7. `workout-image --id <workout-id>` when a picture of a workout's intervals helps explain it.
 
 ## Install
 
@@ -111,12 +139,29 @@ trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --json
 trainerroad-cli replace-workout --id <planned-activity-id> --alternate-id <workout-id> --json
 trainerroad-cli switch-workout --id <planned-activity-id> --mode outside --json
 trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
+trainerroad-cli remove-workout --id <planned-activity-id> --dry-run
 ```
 
 `copy-workout` is the reliable way to place an existing planned workout on another date.
 `add-workout` exists, but TrainerRoad's add endpoints are still inconsistent and may fail even after retry/reconciliation.
 
-4. Discover all commands
+4. Events, annotations, and images
+
+```bash
+trainerroad-cli add-event --name "Black Fork" --date 2027-05-01 --discipline gravel --priority A --duration 300 --tss 340 --dry-run
+trainerroad-cli add-event --name "Tuesday crit" --date 2026-10-06 --discipline criterium --priority C --duration 60 --intensity 9 --json
+trainerroad-cli remove-workout --id <planned-activity-id> --json   # events and workouts share this
+trainerroad-cli add-annotation --type time-off --date 2026-09-21 --days 3 --title "Travel" --dry-run
+trainerroad-cli add-annotation --type illness --date 2026-09-21 --end-date 2026-09-23 --notes "Head cold" --json
+trainerroad-cli annotation-details --id <annotation-id> --json
+trainerroad-cli remove-annotation --id <annotation-id> --json
+trainerroad-cli workout-image --id 1592808 --file fishers.png
+trainerroad-cli workout-image --id 1592808 --format svg --file fishers.svg
+```
+
+PNG output uses the optional `@resvg/resvg-js` package. If it is not installed, use `--format svg`.
+
+5. Discover all commands
 
 ```bash
 trainerroad-cli help

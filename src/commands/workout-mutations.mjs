@@ -1,3 +1,5 @@
+import { isHttpStatus } from "../trainerroad-client.mjs";
+
 const ALTERNATE_CATEGORIES = new Set(["similar", "easier", "harder", "longer", "shorter"]);
 const SWITCH_MODES = new Set(["inside", "outside"]);
 
@@ -306,5 +308,63 @@ export async function commandSwitchWorkout(flags, deps) {
     return;
   }
 
+  await writeOutput(payload, { ...flags, json: !flags.jsonl });
+}
+
+const ADAPTIVE_NOTE =
+  "Removing a planned workout lets TrainerRoad's Adaptive Training rebuild the upcoming plan around the gap. Re-read `future` afterwards.";
+
+export async function commandRemoveWorkout(flags, deps) {
+  const { isJsonMode, requireFlag, toBoolean, writeOutput } = deps;
+  const dryRun = toBoolean(flags["dry-run"], false);
+  const plannedActivityId = String(requireFlag("remove-workout", flags, "id"));
+  const { client, memberInfo } = await requirePrivateMember(flags, deps);
+
+  let before = null;
+  try {
+    before = summarizePlannedActivity(await client.getPlannedActivity(plannedActivityId, memberInfo.username));
+  } catch (error) {
+    if (!isHttpStatus(error, 404)) throw error;
+  }
+  const noop = before === null;
+
+  const base = {
+    generatedAt: new Date().toISOString(),
+    command: "remove-workout",
+    member: { memberId: memberInfo.memberId, username: memberInfo.username },
+    query: { plannedActivityId },
+    before,
+    adaptiveTraining: ADAPTIVE_NOTE,
+  };
+
+  if (dryRun || noop) {
+    const payload = {
+      ...base,
+      dryRun,
+      noop,
+      message: noop
+        ? `No planned activity with id ${plannedActivityId} exists on the calendar.`
+        : `Would remove ${before.workoutName ?? "workout"} from ${before.date}.`,
+    };
+    if (!isJsonMode(flags)) {
+      await writeOutput(payload, flags, (value) => (value.noop ? value.message : `${value.message}\nNo changes made.`));
+      return;
+    }
+    await writeOutput(payload, { ...flags, json: !flags.jsonl });
+    return;
+  }
+
+  await client.deletePlannedActivity(plannedActivityId, memberInfo.username);
+  const payload = {
+    ...base,
+    dryRun: false,
+    noop: false,
+    message: `Removed ${before.workoutName ?? "workout"} from ${before.date} (plannedActivityId=${plannedActivityId}).`,
+  };
+
+  if (!isJsonMode(flags)) {
+    await writeOutput(payload, flags, (value) => `${value.message}\n${value.adaptiveTraining}`);
+    return;
+  }
   await writeOutput(payload, { ...flags, json: !flags.jsonl });
 }

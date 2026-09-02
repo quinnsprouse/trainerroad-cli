@@ -9,13 +9,60 @@ const PROGRESSION_ZONE_META = {
   79: { zoneKey: "anaerobic", zoneLabel: "Anaerobic", sortOrder: 6 },
 };
 
-const ANNOTATION_TYPE_LABELS = {
+// From the web app's enum, checked against real annotations on 2026-09-02 (typeId 2 "Wisdom Teeth",
+// typeId 4 "Hiking Out West"). Earlier releases had 2 and 4 swapped.
+export const ANNOTATION_TYPE_LABELS = {
   1: "note",
-  2: "time-off",
+  2: "illness",
   3: "injury",
-  4: "illness",
-  9: "plan-marker",
+  4: "time-off",
+  5: "stage-race",
+  6: "custom-plan-start",
+  7: "custom-plan-week",
+  8: "custom-plan-block",
+  9: "plan-start",
+  10: "plan-week",
 };
+
+// Names an agent can pass to add-annotation --type. Only the four user-editable types.
+export const ANNOTATION_TYPE_IDS = {
+  note: 1,
+  illness: 2,
+  sick: 2,
+  injury: 3,
+  "time-off": 4,
+};
+
+function endDateOnlyFrom(startDateOnly, durationSeconds) {
+  if (!startDateOnly || !Number.isFinite(Number(durationSeconds))) return startDateOnly ?? null;
+  const days = Math.max(1, Math.round(Number(durationSeconds) / 86_400));
+  const [year, month, day] = startDateOnly.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days - 1)).toISOString().slice(0, 10);
+}
+
+// Shape of GET /app/api/react-calendar/annotation/{id}: the timeline row plus title, text, colour.
+export function compactAnnotationDetail(record) {
+  const dateOnly = toIsoDateFromCalendarDate(record?.date);
+  const durationSeconds = record?.duration ?? null;
+  const typeLabel = ANNOTATION_TYPE_LABELS[record?.typeId] ?? `type-${record?.typeId ?? "unknown"}`;
+  return {
+    id: record?.id ?? null,
+    type: typeLabel,
+    typeId: record?.typeId ?? null,
+    typeLabel,
+    title: record?.title ?? null,
+    text: record?.text ?? null,
+    date: record?.date ?? null,
+    dateOnly,
+    endDateOnly: endDateOnlyFrom(dateOnly, durationSeconds),
+    durationSeconds,
+    durationDays: Number.isFinite(Number(durationSeconds)) ? Math.round(Number(durationSeconds) / 86_400) : null,
+    timeOfDay: record?.timeOfDay ?? null,
+    colorId: record?.colorId ?? null,
+    colorHex: record?.colorHex ?? null,
+    plannedActivityGroupId: record?.plannedActivityGroupId ?? null,
+  };
+}
 
 function toIsoDateFromPlanned(item) {
   return `${String(item.date.year).padStart(4, "0")}-${String(item.date.month).padStart(2, "0")}-${String(item.date.day).padStart(2, "0")}`;
@@ -135,12 +182,71 @@ export function compactCurrentPlan(plan) {
     dateOnly: plan.start ? toIsoDate(plan.start) : null,
     canEdit: plan.canEdit ?? null,
     currentPhase: plan.currentPhase ?? null,
+    currentPhaseId: plan.currentPhaseId ?? null,
+    currentPhaseName: plan.currentPhaseName ?? null,
     currentPhaseStart: plan.currentPhaseStart ?? null,
     currentPhaseEnd: plan.currentPhaseEnd ?? null,
     plannedActivityGroupType: plan.plannedActivityGroupType ?? null,
     autoUpdateApplied: plan.autoUpdateApplied ?? null,
     phaseCount: Array.isArray(plan.phases) ? plan.phases.length : 0,
     phases: Array.isArray(plan.phases) ? plan.phases.map((phase) => compactPlanPhase(phase)) : [],
+    source: plan.source ?? "current-custom-plan",
+  };
+}
+
+function dateWindowContains(start, end, dateOnly) {
+  if (!dateOnly) return false;
+  const startDateOnly = start ? toIsoDate(start) : null;
+  const endDateOnly = end ? toIsoDate(end) : null;
+  if (!startDateOnly || !endDateOnly) return false;
+  return startDateOnly <= dateOnly && dateOnly <= endDateOnly;
+}
+
+// Phases carry the plan's id. When they don't, fall back to phases that sit inside the plan window.
+function phaseBelongsToPlan(phase, plan) {
+  if (phase?.customPlanId != null && plan?.id != null) {
+    return String(phase.customPlanId) === String(plan.id);
+  }
+  const phaseStart = phase?.start ? toIsoDate(phase.start) : null;
+  const phaseEnd = phase?.end ? toIsoDate(phase.end) : null;
+  return dateWindowContains(plan?.start, plan?.end, phaseStart) && dateWindowContains(plan?.start, plan?.end, phaseEnd);
+}
+
+// Replacement for the retired current-custom-plan endpoint: the plan whose window contains today,
+// with its phases attached. Returns a raw-shaped plan for compactCurrentPlan, or null.
+export function deriveCurrentPlanFromPlans(plans, phases, todayDateOnly, { memberId = null } = {}) {
+  const planList = Array.isArray(plans) ? plans : [];
+  const phaseList = Array.isArray(phases) ? phases : [];
+  const activePlans = planList
+    .filter((plan) => dateWindowContains(plan?.start, plan?.end, todayDateOnly))
+    .sort((a, b) => toIsoDate(b.start).localeCompare(toIsoDate(a.start)));
+  const plan = activePlans[0];
+  if (!plan) return null;
+
+  const planPhases = phaseList
+    .filter((phase) => phaseBelongsToPlan(phase, plan))
+    .sort((a, b) => (a?.start && b?.start ? toIsoDate(a.start).localeCompare(toIsoDate(b.start)) : 0));
+  const currentPhase =
+    planPhases.find((phase) => dateWindowContains(phase?.start, phase?.end, todayDateOnly)) ?? null;
+
+  return {
+    id: plan.id ?? null,
+    name: plan.name ?? null,
+    memberId: plan.memberId ?? memberId,
+    discipline: plan.discipline ?? null,
+    volume: plan.volume ?? null,
+    start: plan.start ?? null,
+    end: plan.end ?? null,
+    canEdit: plan.canEdit ?? null,
+    currentPhase: currentPhase?.type ?? plan.phase ?? null,
+    currentPhaseId: currentPhase?.id ?? null,
+    currentPhaseName: currentPhase?.planName ?? null,
+    currentPhaseStart: currentPhase?.start ?? null,
+    currentPhaseEnd: currentPhase?.end ?? null,
+    plannedActivityGroupType: plan.plannedActivityGroupType ?? null,
+    autoUpdateApplied: plan.autoUpdateApplied ?? null,
+    phases: planPhases,
+    source: "all-user-plans",
   };
 }
 
