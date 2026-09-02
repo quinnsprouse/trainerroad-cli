@@ -13,27 +13,28 @@ function lowerFirst(key) {
   return key.length > 0 ? key[0].toLowerCase() + key.slice(1) : key;
 }
 
-/**
- * TrainerRoad serialises with PascalCase keys unless the `trainerroad-jsonformat: camel-case`
- * header is honoured. Every consumer in this CLI expects camelCase, so if a payload comes back
- * PascalCase anyway (header dropped, endpoint changed) the first letter of each key is lowered.
- * Payloads that are already camelCase pass through untouched.
- */
-export function camelizeKeys(value) {
-  if (Array.isArray(value)) return value.map((item) => camelizeKeys(item));
-  if (value === null || typeof value !== "object") return value;
-  const out = {};
-  for (const [key, inner] of Object.entries(value)) {
-    out[lowerFirst(key)] = camelizeKeys(inner);
-  }
-  return out;
-}
-
 export function looksPascalCase(value) {
   const sample = Array.isArray(value) ? value.find((item) => item && typeof item === "object") : value;
   if (!sample || typeof sample !== "object") return false;
   const keys = Object.keys(sample);
   return keys.length > 0 && keys.every((key) => /^[A-Z]/.test(key));
+}
+
+/**
+ * TrainerRoad serialises with PascalCase keys unless the `trainerroad-jsonformat: camel-case`
+ * header is honoured, and some endpoints (personal records) nest PascalCase objects inside a
+ * camelCase envelope even then. Every consumer in this CLI expects camelCase, so each object whose
+ * keys all start with a capital gets its keys lower-cased, at every depth. camelCase passes through.
+ */
+export function camelizeKeys(value) {
+  if (Array.isArray(value)) return value.map((item) => camelizeKeys(item));
+  if (value === null || typeof value !== "object") return value;
+  const rename = looksPascalCase(value);
+  const out = {};
+  for (const [key, inner] of Object.entries(value)) {
+    out[rename ? lowerFirst(key) : key] = camelizeKeys(inner);
+  }
+  return out;
 }
 
 export class HttpError extends Error {
@@ -232,7 +233,7 @@ export class TrainerRoadClient {
         { status: response.status, statusText: response.statusText, path: urlOrPath, payload },
       );
     }
-    return looksPascalCase(payload) ? camelizeKeys(payload) : payload;
+    return camelizeKeys(payload);
   }
 
   async login({
@@ -364,6 +365,53 @@ export class TrainerRoadClient {
     });
   }
 
+  async getAnnotation(annotationId, usernameForReferer) {
+    return this.#requestJson(`/app/api/react-calendar/annotation/${encodeURIComponent(annotationId)}`, {
+      headers: {
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+    });
+  }
+
+  // Body: { date: "YYYY-MM-DD", timeOfDay, duration (seconds, whole days), title, text, typeId, colorId }.
+  // Responds 204 with no body; the new id only shows up in the timeline afterwards.
+  async createAnnotation(annotation, usernameForReferer) {
+    const response = await this.#request("/app/api/calendar/annotations", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+      body: JSON.stringify(annotation),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(
+        `Request failed: ${response.status} ${response.statusText} for create annotation -> ${text}`,
+        { status: response.status, statusText: response.statusText, path: "/app/api/calendar/annotations", payload: text },
+      );
+    }
+    return { ok: true, status: response.status };
+  }
+
+  async deleteAnnotation(annotationId, usernameForReferer) {
+    const path = `/app/api/calendar/annotations/${encodeURIComponent(annotationId)}`;
+    const response = await this.#request(path, {
+      method: "DELETE",
+      headers: { referer: `${APP_URL}/calendar/${usernameForReferer}` },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(
+        `Request failed: ${response.status} ${response.statusText} for ${path} -> ${text}`,
+        { status: response.status, statusText: response.statusText, path, payload: text },
+      );
+    }
+    return { ok: true, status: response.status };
+  }
+
   async getWeightHistory(memberId, usernameForReferer) {
     return this.#requestJson(`/app/api/weight-history/${memberId}/all`, {
       headers: {
@@ -493,18 +541,25 @@ export class TrainerRoadClient {
         EndDate: endDate,
       },
     ];
-    return this.#requestJson(
-      `/app/api/personal-records/for-date-range/${memberId}?${params.toString()}`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "trainerroad-jsonformat": "camel-case",
-          referer: `${APP_URL}/career/${usernameForReferer}`,
-        },
-        body: JSON.stringify(payload),
+    const options = {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/career/${usernameForReferer}`,
       },
-    );
+      body: JSON.stringify(payload),
+    };
+    // The web app dropped the /for-date-range segment in 2026; keep the old path as a fallback.
+    try {
+      return await this.#requestJson(`/app/api/personal-records/${memberId}?${params.toString()}`, options);
+    } catch (error) {
+      if (!isHttpStatus(error, 404)) throw error;
+      return this.#requestJson(
+        `/app/api/personal-records/for-date-range/${memberId}?${params.toString()}`,
+        options,
+      );
+    }
   }
 
   async getTimeline(memberId, usernameForReferer) {

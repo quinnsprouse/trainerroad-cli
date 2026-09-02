@@ -20,6 +20,7 @@ import {
   COMMAND_REQUIRED_FLAGS,
   COMMANDS,
   FLAG_DETAILS,
+  COMMAND_FLAG_DETAILS,
   FILTERABLE_COMMANDS,
   GLOBAL_NOTES,
   PROJECT_NOTICE,
@@ -44,6 +45,11 @@ import {
   commandSwitchWorkout,
   commandWorkoutAlternates,
 } from "./commands/workout-mutations.mjs";
+import {
+  commandAddAnnotation,
+  commandAnnotationDetails,
+  commandRemoveAnnotation,
+} from "./commands/annotation-mutations.mjs";
 import { commandFuture, commandPast, commandToday } from "./commands/workouts.mjs";
 import {
   formatDateTimeInTimeZone,
@@ -201,8 +207,12 @@ function validateCommandFlags(command, flags) {
   return { unknownFlags, allowlist: Array.from(allowlist) };
 }
 
-function formatFlagLabel(name) {
-  const detail = FLAG_DETAILS[name] ?? {};
+function flagDetail(command, name) {
+  return COMMAND_FLAG_DETAILS[command]?.[name] ?? FLAG_DETAILS[name] ?? {};
+}
+
+function formatFlagLabel(command, name) {
+  const detail = flagDetail(command, name);
   return `--${name}${detail.placeholder ? ` ${detail.placeholder}` : ""}`;
 }
 
@@ -211,8 +221,8 @@ function getCommandHelpOptions(command) {
   const requiredFlags = new Set(COMMAND_REQUIRED_FLAGS[command] ?? []);
   return allowlist.map((name) => ({
     name,
-    label: formatFlagLabel(name),
-    description: FLAG_DETAILS[name]?.description ?? "No description available.",
+    label: formatFlagLabel(command, name),
+    description: flagDetail(command, name).description ?? "No description available.",
     required: requiredFlags.has(name),
   }));
 }
@@ -405,14 +415,14 @@ function getLastItem(values) {
 
 function compactPersonalRecord(record) {
   return {
-    seconds: record?.Seconds ?? null,
-    watts: record?.Watts ?? null,
-    workoutDate: record?.WorkoutDate ?? null,
-    workoutSeconds: record?.WorkoutSeconds ?? null,
-    workoutGuid: record?.WorkoutGuid ?? null,
-    workoutRecordId: record?.WorkoutRecordId ?? null,
-    workoutRecordName: record?.WorkoutRecordName ?? null,
-    surveyResponse: record?.SurveyResponseTranslated ?? null,
+    seconds: record?.seconds ?? record?.Seconds ?? null,
+    watts: record?.watts ?? record?.Watts ?? null,
+    workoutDate: record?.workoutDate ?? record?.WorkoutDate ?? null,
+    workoutSeconds: record?.workoutSeconds ?? record?.WorkoutSeconds ?? null,
+    workoutGuid: record?.workoutGuid ?? record?.WorkoutGuid ?? null,
+    workoutRecordId: record?.workoutRecordId ?? record?.WorkoutRecordId ?? null,
+    workoutRecordName: record?.workoutRecordName ?? record?.WorkoutRecordName ?? null,
+    surveyResponse: record?.surveyResponseTranslated ?? record?.SurveyResponseTranslated ?? null,
   };
 }
 
@@ -785,6 +795,15 @@ async function main() {
       return;
     case "switch-workout":
       await commandSwitchWorkout(flags, commandDeps);
+      return;
+    case "annotation-details":
+      await commandAnnotationDetails(flags, commandDeps);
+      return;
+    case "add-annotation":
+      await commandAddAnnotation(flags, commandDeps);
+      return;
+    case "remove-annotation":
+      await commandRemoveAnnotation(flags, commandDeps);
       return;
     case "logout":
       await commandLogout(flags, commandDeps);

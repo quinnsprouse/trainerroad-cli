@@ -179,3 +179,10 @@ test("camelizeKeys leaves camelCase payloads untouched and looksPascalCase is co
   assert.equal(looksPascalCase("text"), false);
   assert.equal(looksPascalCase(null), false);
 });
+
+test("camelizeKeys normalises PascalCase objects nested inside a camelCase envelope", () => {
+  const mixed = { results: [{ slot: 1, personalRecords: [{ Seconds: 5, Watts: 900, Ride: { Id: 1 } }] }] };
+  assert.deepEqual(camelizeKeys(mixed), {
+    results: [{ slot: 1, personalRecords: [{ seconds: 5, watts: 900, ride: { id: 1 } }] }],
+  });
+});

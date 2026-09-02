@@ -9,13 +9,54 @@ const PROGRESSION_ZONE_META = {
   79: { zoneKey: "anaerobic", zoneLabel: "Anaerobic", sortOrder: 6 },
 };
 
-const ANNOTATION_TYPE_LABELS = {
+export const ANNOTATION_TYPE_LABELS = {
   1: "note",
   2: "time-off",
   3: "injury",
   4: "illness",
   9: "plan-marker",
 };
+
+// Names an agent can pass to add-annotation --type. Rest days and "other" adjustments are not
+// creatable through this map yet because their type ids have not been confirmed.
+export const ANNOTATION_TYPE_IDS = {
+  note: 1,
+  "time-off": 2,
+  injury: 3,
+  illness: 4,
+  sick: 4,
+};
+
+function endDateOnlyFrom(startDateOnly, durationSeconds) {
+  if (!startDateOnly || !Number.isFinite(Number(durationSeconds))) return startDateOnly ?? null;
+  const days = Math.max(1, Math.round(Number(durationSeconds) / 86_400));
+  const [year, month, day] = startDateOnly.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days - 1)).toISOString().slice(0, 10);
+}
+
+// Shape of GET /app/api/react-calendar/annotation/{id}: the timeline row plus title, text, colour.
+export function compactAnnotationDetail(record) {
+  const dateOnly = toIsoDateFromCalendarDate(record?.date);
+  const durationSeconds = record?.duration ?? null;
+  const typeLabel = ANNOTATION_TYPE_LABELS[record?.typeId] ?? `type-${record?.typeId ?? "unknown"}`;
+  return {
+    id: record?.id ?? null,
+    type: typeLabel,
+    typeId: record?.typeId ?? null,
+    typeLabel,
+    title: record?.title ?? null,
+    text: record?.text ?? null,
+    date: record?.date ?? null,
+    dateOnly,
+    endDateOnly: endDateOnlyFrom(dateOnly, durationSeconds),
+    durationSeconds,
+    durationDays: Number.isFinite(Number(durationSeconds)) ? Math.round(Number(durationSeconds) / 86_400) : null,
+    timeOfDay: record?.timeOfDay ?? null,
+    colorId: record?.colorId ?? null,
+    colorHex: record?.colorHex ?? null,
+    plannedActivityGroupId: record?.plannedActivityGroupId ?? null,
+  };
+}
 
 function toIsoDateFromPlanned(item) {
   return `${String(item.date.year).padStart(4, "0")}-${String(item.date.month).padStart(2, "0")}-${String(item.date.day).padStart(2, "0")}`;

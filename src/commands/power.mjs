@@ -68,7 +68,8 @@ export async function commandPowerRecords(flags, deps) {
   const allRecords = Array.isArray(raw?.results?.[0]?.personalRecords)
     ? raw.results[0].personalRecords
     : [];
-  const rankedByWatts = [...allRecords].sort((a, b) => (b?.Watts ?? 0) - (a?.Watts ?? 0));
+  const wattsOf = (item) => item?.watts ?? item?.Watts ?? 0;
+  const rankedByWatts = [...allRecords].sort((a, b) => wattsOf(b) - wattsOf(a));
   const selectedRaw = full ? allRecords : rankedByWatts.slice(0, limit);
   const records = full ? selectedRaw : selectedRaw.map((item) => compactPersonalRecord(item));
 

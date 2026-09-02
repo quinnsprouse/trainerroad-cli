@@ -264,6 +264,31 @@ export const COMMANDS = {
       "trainerroad-cli switch-workout --id 123456 --mode outside --json",
     ],
   },
+  "annotation-details": {
+    summary: "Fetch one calendar annotation with its title and notes (private mode).",
+    usage: ["trainerroad-cli annotation-details --id <annotation-id> [--full] [--json|--jsonl]"],
+    examples: ["trainerroad-cli annotation-details --id 1818fb12-7294-4a98-b494-b4b90160edc1 --json"],
+  },
+  "add-annotation": {
+    summary:
+      "Add a calendar annotation: time off, illness, injury, or a note. Multi-day via --days or --end-date. TrainerRoad may adapt nearby workouts (private mode).",
+    usage: [
+      "trainerroad-cli add-annotation --type time-off|illness|injury|note --date YYYY-MM-DD [--days <count> | --end-date YYYY-MM-DD] [--title <text>] [--notes <text>] [--dry-run] [--json|--jsonl]",
+    ],
+    examples: [
+      "trainerroad-cli add-annotation --type time-off --date 2026-09-21 --days 3 --title \"Travel\" --dry-run",
+      "trainerroad-cli add-annotation --type illness --date 2026-09-21 --end-date 2026-09-23 --notes \"Head cold\" --json",
+      "trainerroad-cli add-annotation --type note --date 2026-09-21 --title \"New saddle\" --json",
+    ],
+  },
+  "remove-annotation": {
+    summary: "Remove a calendar annotation by id. No-op if it is already gone (private mode).",
+    usage: ["trainerroad-cli remove-annotation --id <annotation-id> [--dry-run] [--json|--jsonl]"],
+    examples: [
+      "trainerroad-cli remove-annotation --id 1818fb12-7294-4a98-b494-b4b90160edc1 --dry-run",
+      "trainerroad-cli remove-annotation --id 1818fb12-7294-4a98-b494-b4b90160edc1 --json",
+    ],
+  },
   logout: {
     summary: "Clear local persisted session.",
     usage: ["trainerroad-cli logout"],
@@ -326,6 +351,9 @@ export const COMMAND_REQUIRED_FLAGS = {
   "move-workout": ["id", "to"],
   "replace-workout": ["id", "alternate-id"],
   "switch-workout": ["id", "mode"],
+  "annotation-details": ["id"],
+  "add-annotation": ["type", "date"],
+  "remove-annotation": ["id"],
 };
 
 export const FLAG_DETAILS = {
@@ -438,7 +466,10 @@ export const FLAG_DETAILS = {
     placeholder: "<count>",
     description: "Upstream workout library page size.",
   },
-  id: { placeholder: "<id>", description: "Workout, planned activity, or record identifier." },
+  id: { placeholder: "<id>", description: "Workout, planned activity, annotation, or record identifier." },
+  title: { placeholder: "<text>", description: "Annotation title shown on the calendar. Defaults to the type name." },
+  notes: { placeholder: "<text>", description: "Free-text notes stored with the annotation." },
+  "color-id": { placeholder: "<id>", description: "TrainerRoad annotation colour id (default 2)." },
   "include-chart": {
     placeholder: "true|false",
     description: "Include workout chart/sample data in workout-details.",
@@ -483,6 +514,26 @@ function mergeFlagGroups(...groups) {
       .filter(Boolean),
   );
 }
+
+// Per-command overrides for flags whose meaning differs from the shared FLAG_DETAILS entry.
+export const COMMAND_FLAG_DETAILS = {
+  "add-annotation": {
+    type: {
+      placeholder: "time-off|illness|injury|note",
+      description: "Annotation type. Also accepts a numeric TrainerRoad typeId.",
+    },
+    date: { placeholder: "YYYY-MM-DD", description: "First day of the annotation." },
+    days: { placeholder: "<count>", description: "Number of days the annotation covers (default 1)." },
+    "end-date": { placeholder: "YYYY-MM-DD", description: "Last day of the annotation, inclusive. Overrides --days." },
+  },
+  "annotation-details": {
+    id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
+    full: { description: "Include the raw upstream annotation payload." },
+  },
+  "remove-annotation": {
+    id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
+  },
+};
 
 const SHARED_FLAGS = {
   help: ["help"],
@@ -763,6 +814,32 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.credentials,
     SHARED_FLAGS.writeSafety,
     ["id", "mode"],
+  ),
+  "annotation-details": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "full"],
+  ),
+  "add-annotation": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["type", "date", "days", "end-date", "title", "notes", "color-id"],
+  ),
+  "remove-annotation": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["id"],
   ),
   logout: mergeFlagGroups(SHARED_FLAGS.help, SHARED_FLAGS.output, SHARED_FLAGS.session),
 };
