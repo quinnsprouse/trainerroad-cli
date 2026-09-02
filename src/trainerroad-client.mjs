@@ -380,6 +380,34 @@ export class TrainerRoadClient {
     return text;
   }
 
+  // Body shape: see docs/api-notes.md "Event and planned-activity write endpoints".
+  async createEvent(event, usernameForReferer) {
+    const path = "/app/api/calendar/plannedactivities/event";
+    const response = await this.#request(path, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "trainerroad-jsonformat": "camel-case",
+        referer: `${APP_URL}/calendar/${usernameForReferer}`,
+      },
+      body: JSON.stringify(event),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(`Request failed: ${response.status} ${response.statusText} for ${path} -> ${text}`, {
+        status: response.status,
+        statusText: response.statusText,
+        path,
+        payload: text,
+      });
+    }
+    try {
+      return camelizeKeys(JSON.parse(text));
+    } catch {
+      return { ok: true, status: response.status, raw: text };
+    }
+  }
+
   async deletePlannedActivity(plannedActivityId, usernameForReferer) {
     const path = `/app/api/calendar/plannedactivities/${encodeURIComponent(plannedActivityId)}`;
     const response = await this.#request(path, {

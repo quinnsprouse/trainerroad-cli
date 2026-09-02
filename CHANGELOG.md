@@ -3,6 +3,7 @@
 ## 0.4.0 - 2026-09-02
 
 - Added `add-annotation`, `remove-annotation`, and `annotation-details`: create time off, illness, injury, and note entries (single or multi-day via `--days` or `--end-date`), remove them by id (no-op when already gone), and read the title and notes that the timeline rows omit. Uses `POST/DELETE /app/api/calendar/annotations` and `GET /app/api/react-calendar/annotation/{id}`, confirmed live.
+- Added `add-event`: creates a race or event via `POST /app/api/calendar/plannedactivities/event` with discipline (by name or id), A/B/C priority, duration, and either a TSS or a 1-10 intensity estimate. Confirmed live. Events are removed with `remove-workout`.
 - Added `remove-workout`: deletes a planned workout or event by planned-activity id via `DELETE /app/api/calendar/plannedactivities/{id}` (confirmed live), with `--dry-run` and a no-op when the record is already gone.
 - Fixed swapped annotation type labels: typeId 2 is illness and typeId 4 is time off (checked against the web app's enum and real calendar entries). Plan-marker ids 5 to 10 are now labelled too.
 - Added `workout-image`: saves a workout's power-profile chart as PNG (default, via the optional `@resvg/resvg-js` package) or SVG. Workout records from `workout-library` and `workout-details` now include `chartUrl`.

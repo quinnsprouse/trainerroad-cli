@@ -27,6 +27,7 @@ It can also perform a small set of verified calendar writes for planned workouts
 - replace a workout with a specific alternate
 - switch a workout between inside and outside
 - remove a planned workout or event
+- add a race or event with discipline, priority, and a TSS or intensity estimate
 - add and remove calendar annotations: time off, illness, injury, notes
 - save a workout's power-profile chart as PNG or SVG
 
@@ -144,9 +145,12 @@ trainerroad-cli remove-workout --id <planned-activity-id> --dry-run
 `copy-workout` is the reliable way to place an existing planned workout on another date.
 `add-workout` exists, but TrainerRoad's add endpoints are still inconsistent and may fail even after retry/reconciliation.
 
-4. Annotations and images
+4. Events, annotations, and images
 
 ```bash
+trainerroad-cli add-event --name "Black Fork" --date 2027-05-01 --discipline gravel --priority A --duration 300 --tss 340 --dry-run
+trainerroad-cli add-event --name "Tuesday crit" --date 2026-10-06 --discipline criterium --priority C --duration 60 --intensity 9 --json
+trainerroad-cli remove-workout --id <planned-activity-id> --json   # events and workouts share this
 trainerroad-cli add-annotation --type time-off --date 2026-09-21 --days 3 --title "Travel" --dry-run
 trainerroad-cli add-annotation --type illness --date 2026-09-21 --end-date 2026-09-23 --notes "Head cold" --json
 trainerroad-cli annotation-details --id <annotation-id> --json

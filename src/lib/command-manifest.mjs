@@ -264,6 +264,17 @@ export const COMMANDS = {
       "trainerroad-cli switch-workout --id 123456 --mode outside --json",
     ],
   },
+  "add-event": {
+    summary:
+      "Add a race or event to the calendar with discipline, priority, duration, and a TSS or intensity estimate. Remove it later with remove-workout (private mode).",
+    usage: [
+      "trainerroad-cli add-event --name <text> --date YYYY-MM-DD --discipline <name|id> --duration <minutes> (--tss <number> | --intensity <1-10>) [--priority A|B|C] [--notes <text>] [--dry-run] [--json|--jsonl]",
+    ],
+    examples: [
+      "trainerroad-cli add-event --name \"Black Fork\" --date 2027-05-01 --discipline gravel --priority A --duration 300 --tss 340 --dry-run",
+      "trainerroad-cli add-event --name \"Tuesday crit\" --date 2026-10-06 --discipline criterium --priority C --duration 60 --intensity 9 --json",
+    ],
+  },
   "remove-workout": {
     summary:
       "Remove a planned workout or event from the calendar by planned-activity id. TrainerRoad may rebuild the plan around the gap (private mode).",
@@ -370,6 +381,7 @@ export const COMMAND_REQUIRED_FLAGS = {
   "move-workout": ["id", "to"],
   "replace-workout": ["id", "alternate-id"],
   "switch-workout": ["id", "mode"],
+  "add-event": ["name", "date", "discipline", "duration"],
   "remove-workout": ["id"],
   "workout-image": ["id"],
   "annotation-details": ["id"],
@@ -488,6 +500,15 @@ export const FLAG_DETAILS = {
     description: "Upstream workout library page size.",
   },
   id: { placeholder: "<id>", description: "Workout, planned activity, annotation, or record identifier." },
+  name: { placeholder: "<text>", description: "Event name shown on the calendar." },
+  discipline: {
+    placeholder: "<name|id>",
+    description:
+      "Event discipline: gravel, criterium, time-trial, gran-fondo, climbing-road-race, rolling-road-race, cyclocross, xc-olympic, xc-marathon, short-track, gravity, enduro, or a triathlon type; numeric ids accepted.",
+  },
+  priority: { placeholder: "A|B|C", description: "Race priority. A drives the plan, C is a training race (default B)." },
+  tss: { placeholder: "<number>", description: "Expected TSS for the event. Use this or --intensity." },
+  intensity: { placeholder: "<1-10>", description: "Expected intensity on TrainerRoad's 1-10 scale. Use this or --tss." },
   file: { placeholder: "<path>", description: "Destination file for the image (default workout-<id>.png)." },
   format: { placeholder: "png|svg", description: "Image format. Inferred from --file extension when omitted." },
   width: { placeholder: "<px>", description: "PNG width in pixels (default 1200)." },
@@ -560,6 +581,12 @@ export const COMMAND_FLAG_DETAILS = {
   },
   "remove-workout": {
     id: { placeholder: "<planned-activity-id>", description: "Planned activity id from `future --details` or `events`." },
+  },
+  "add-event": {
+    date: { placeholder: "YYYY-MM-DD", description: "Event date." },
+    duration: { placeholder: "<minutes>", description: "Expected event duration in minutes." },
+    notes: { placeholder: "<text>", description: "Free-text description stored with the event." },
+    full: { description: "Include TrainerRoad's raw create response." },
   },
   "remove-annotation": {
     id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
@@ -845,6 +872,15 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.credentials,
     SHARED_FLAGS.writeSafety,
     ["id", "mode"],
+  ),
+  "add-event": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.jsonAndJsonl,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    SHARED_FLAGS.writeSafety,
+    ["name", "date", "discipline", "priority", "duration", "tss", "intensity", "notes", "full"],
   ),
   "remove-workout": mergeFlagGroups(
     SHARED_FLAGS.help,
