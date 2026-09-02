@@ -50,6 +50,7 @@ import {
   commandAnnotationDetails,
   commandRemoveAnnotation,
 } from "./commands/annotation-mutations.mjs";
+import { commandWorkoutImage } from "./commands/workout-image.mjs";
 import { commandFuture, commandPast, commandToday } from "./commands/workouts.mjs";
 import {
   formatDateTimeInTimeZone,
@@ -795,6 +796,9 @@ async function main() {
       return;
     case "switch-workout":
       await commandSwitchWorkout(flags, commandDeps);
+      return;
+    case "workout-image":
+      await commandWorkoutImage(flags, commandDeps);
       return;
     case "annotation-details":
       await commandAnnotationDetails(flags, commandDeps);

@@ -365,6 +365,21 @@ export class TrainerRoadClient {
     });
   }
 
+  // Public asset fetch (workout chart SVGs live on a CDN, no cookies needed).
+  async fetchText(url) {
+    const response = await fetch(url, { headers: { "user-agent": this.userAgent } });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new HttpError(`Request failed: ${response.status} ${response.statusText} for ${url}`, {
+        status: response.status,
+        statusText: response.statusText,
+        path: url,
+        payload: text,
+      });
+    }
+    return text;
+  }
+
   async getAnnotation(annotationId, usernameForReferer) {
     return this.#requestJson(`/app/api/react-calendar/annotation/${encodeURIComponent(annotationId)}`, {
       headers: {

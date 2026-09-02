@@ -264,6 +264,16 @@ export const COMMANDS = {
       "trainerroad-cli switch-workout --id 123456 --mode outside --json",
     ],
   },
+  "workout-image": {
+    summary: "Save a workout's power-profile chart as PNG (default) or SVG (private mode).",
+    usage: [
+      "trainerroad-cli workout-image --id <workout-id> [--file <path>] [--format png|svg] [--width <px>] [--background <css-color>] [--json]",
+    ],
+    examples: [
+      "trainerroad-cli workout-image --id 1592808 --file fishers.png",
+      "trainerroad-cli workout-image --id 1592808 --format svg --file fishers.svg --json",
+    ],
+  },
   "annotation-details": {
     summary: "Fetch one calendar annotation with its title and notes (private mode).",
     usage: ["trainerroad-cli annotation-details --id <annotation-id> [--full] [--json|--jsonl]"],
@@ -351,6 +361,7 @@ export const COMMAND_REQUIRED_FLAGS = {
   "move-workout": ["id", "to"],
   "replace-workout": ["id", "alternate-id"],
   "switch-workout": ["id", "mode"],
+  "workout-image": ["id"],
   "annotation-details": ["id"],
   "add-annotation": ["type", "date"],
   "remove-annotation": ["id"],
@@ -467,6 +478,10 @@ export const FLAG_DETAILS = {
     description: "Upstream workout library page size.",
   },
   id: { placeholder: "<id>", description: "Workout, planned activity, annotation, or record identifier." },
+  file: { placeholder: "<path>", description: "Destination file for the image (default workout-<id>.png)." },
+  format: { placeholder: "png|svg", description: "Image format. Inferred from --file extension when omitted." },
+  width: { placeholder: "<px>", description: "PNG width in pixels (default 1200)." },
+  background: { placeholder: "<css-color>", description: "PNG background colour (default #1c1c1c)." },
   title: { placeholder: "<text>", description: "Annotation title shown on the calendar. Defaults to the type name." },
   notes: { placeholder: "<text>", description: "Free-text notes stored with the annotation." },
   "color-id": { placeholder: "<id>", description: "TrainerRoad annotation colour id (default 2)." },
@@ -529,6 +544,9 @@ export const COMMAND_FLAG_DETAILS = {
   "annotation-details": {
     id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
     full: { description: "Include the raw upstream annotation payload." },
+  },
+  "workout-image": {
+    id: { placeholder: "<workout-id>", description: "Library workout id (from workout-library, workout-details, or future --details)." },
   },
   "remove-annotation": {
     id: { placeholder: "<annotation-id>", description: "Annotation id from `annotations`." },
@@ -814,6 +832,14 @@ export const COMMAND_FLAG_ALLOWLIST = {
     SHARED_FLAGS.credentials,
     SHARED_FLAGS.writeSafety,
     ["id", "mode"],
+  ),
+  "workout-image": mergeFlagGroups(
+    SHARED_FLAGS.help,
+    SHARED_FLAGS.output,
+    SHARED_FLAGS.json,
+    SHARED_FLAGS.session,
+    SHARED_FLAGS.credentials,
+    ["id", "file", "format", "width", "background"],
   ),
   "annotation-details": mergeFlagGroups(
     SHARED_FLAGS.help,

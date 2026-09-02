@@ -60,6 +60,35 @@ The web calendar loads only `all-user-plans` and `plan-phases`; it never calls `
 - `GET /app/api/plan-builder/current-custom-plan/{memberId}` — 404. The CLI treats this as "no
   explicit current plan" and derives it from the two calls above (plan window containing today).
 
+## Annotation endpoints (authenticated, confirmed 2026-09-02)
+
+Annotations are the calendar's time off, illness, injury, and note entries. Timeline rows carry
+only `id`, `typeId`, `date`, `duration`, `groupId`, `updated`; the title and notes need the detail call.
+
+- `GET /app/api/react-calendar/annotation/{annotationId}` — `id`, `date` ({year,month,day}),
+  `timeOfDay`, `duration` (seconds, whole days), `title`, `text`, `styleIndex`, `typeId`, `colorId`,
+  `colorHex`, `plannedActivityGroupId`.
+- `POST /app/api/calendar/annotations` — JSON body
+  `{"date":"YYYY-MM-DD","timeOfDay":null,"duration":<days*86400>,"title":"...","text":"...","typeId":<n>,"colorId":2}`.
+  `date` must be a plain date string; a `{year,month,day}` object is rejected with 400. Responds 204
+  with no body, so the new id has to be found by diffing the timeline.
+- `DELETE /app/api/calendar/annotations/{annotationId}` — 204. `GET` on that path is 405.
+- Type ids seen in data: 1 note, 2 time-off, 3 injury, 4 illness, 9 plan-marker. The web UI also
+  offers "Rest Day" and "Other" adjustments whose ids are not confirmed yet.
+
+## Workout chart images
+
+`GET /app/api/workouts/{workoutId}/summary` and `POST /app/api/workouts/by-id` both return `picUrl`,
+a public Azure blob URL ending in `chart.svg` (the power-profile graphic, 381x254 viewBox, dark
+background). The blob needs no cookies. The CLI rasterises it with `@resvg/resvg-js`.
+
+## Adaptive Training side effects
+
+TrainerRoad rebuilds upcoming planned workouts in response to calendar changes: deleting or adding
+a workout, and adding time off, illness, or injury. Planned activities expose
+`recommendationReason`, `adaptationLocked`, `adaptationAltered`, and `adaptationReason`. Re-read
+the timeline after any write before reasoning about the plan.
+
 ## Core data endpoints
 
 - `GET /app/api/member-info`
@@ -91,7 +120,7 @@ The web calendar loads only `all-user-plans` and `plan-phases`; it never calls `
   - Returns AI FTP failure status code.
 - `GET /app/api/onboarding/power-ranking?memberId={memberId}`
   - Returns power percentile rankings by duration.
-- `POST /app/api/personal-records/for-date-range/{memberId}?rowType=...&indoorOnly=...`
+- `POST /app/api/personal-records/{memberId}?rowType=...&indoorOnly=...` (was `/personal-records/for-date-range/{memberId}` until mid-2026; the CLI falls back to it on 404)
   - Requires JSON body like:
     - `[{"Slot":1,"StartDate":"2013-05-10","EndDate":"2026-02-23"}]`
   - Returns `results[0].personalRecords`.
