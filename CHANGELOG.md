@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 - 2026-09-05
+
+- Extended standalone event edits with dates, local start times, cycling disciplines, and race priorities. A-priority changes check TrainerRoad's race-spacing result; verification preserves both affected dates.
+- Added recurrence and training-approach discovery, weight-record inspection, and confirmed FTP breakthrough dismissal. Dismissal records that a prompt was viewed without changing FTP. The package includes the workflow coverage reference.
+- Added confirmed recurrence-tail deletion with an explicit unbounded scope, member-scoped detail reads, and deletion-aware verification. The preview window does not limit the deletion.
+- Added experimental browser-derived workflows for activity state and notes, surveys, pending FTP acceptance, outside-workout delivery, annotation edits, plan naming/reapplication, calendar weeks, and limited single-event edits. Writes require confirmation and return read-only verification nudges; these additions have offline fixture coverage, not live-account validation. See docs/workflow-coverage.md for remaining gaps.
+- Added task guides for athlete feedback, device delivery, and unsupported-workflow handoffs. Dispatched workflow cancellation returns uncertain-write recovery without retrying; authentication recovery preserves the selected session and does not add authorization flags.
+- Replaced the CLI with Lasso contracts for all TrainerRoad commands, generated help and schemas, JSON envelopes, NDJSON events, structured recovery errors, next actions, and offline guides.
+- Added mandatory confirmation to calendar changes, login, logout, and image export. Plans exclude credentials and apply rechecks relevant state. Ambiguous calendar writes are not retried.
+- Removed the original parser, discovery manifest, and separate trial binary. See MIGRATION.md for changed flags, exit codes, and response handling.
+- Added strict TypeScript and Effect lint boundaries, offline command tests, local mutation tests, and a packaged-binary smoke test. The existing TrainerRoad client and domain calculations are retained.
+
 ## 0.4.0 - 2026-09-02
 
 - Added `add-annotation`, `remove-annotation`, and `annotation-details`: create time off, illness, injury, and note entries (single or multi-day via `--days` or `--end-date`), remove them by id (no-op when already gone), and read the title and notes that the timeline rows omit. Uses `POST/DELETE /app/api/calendar/annotations` and `GET /app/api/react-calendar/annotation/{id}`, confirmed live.

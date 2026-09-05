@@ -1,55 +1,36 @@
 {
   "name": "trainerroad-cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Unofficial CLI for authenticating with TrainerRoad and querying timeline/workout data",
-  "main": "src/cli.mjs",
+  "main": "dist/bin.cjs",
   "bin": {
-    "trainerroad-cli": "src/cli.mjs",
-    "trcli": "src/cli.mjs"
+    "trainerroad-cli": "bin/trainerroad-cli.mjs",
+    "trcli": "bin/trainerroad-cli.mjs"
   },
   "files": [
-    "src",
+    "bin",
+    "dist",
+    "guides",
+    "skills",
+    "LASSO-LICENSE",
     "CHANGELOG.md",
     "README.md",
+    "MIGRATION.md",
+    "docs/workflow-coverage.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test",
-    "recon": "node scripts/recon.mjs",
-    "cli": "node src/cli.mjs",
-    "help": "node src/cli.mjs help",
-    "discover": "node src/cli.mjs discover",
-    "capabilities": "node src/cli.mjs capabilities",
-    "login": "node src/cli.mjs login",
-    "whoami": "node src/cli.mjs whoami",
-    "timeline": "node src/cli.mjs timeline",
-    "train-now": "node src/cli.mjs train-now",
-    "events": "node src/cli.mjs events",
-    "annotations": "node src/cli.mjs annotations",
-    "levels": "node src/cli.mjs levels",
-    "plan": "node src/cli.mjs plan",
-    "weight-history": "node src/cli.mjs weight-history",
-    "today": "node src/cli.mjs today",
-    "future": "node src/cli.mjs future",
-    "past": "node src/cli.mjs past",
-    "ftp": "node src/cli.mjs ftp",
-    "ftp-prediction": "node src/cli.mjs ftp-prediction",
-    "power-ranking": "node src/cli.mjs power-ranking",
-    "power-records": "node src/cli.mjs power-records",
-    "workout-library": "node src/cli.mjs workout-library",
-    "workout-recommend": "node src/cli.mjs workout-recommend",
-    "workout-details": "node src/cli.mjs workout-details",
-    "add-workout": "node src/cli.mjs add-workout",
-    "copy-workout": "node src/cli.mjs copy-workout",
-    "workout-alternates": "node src/cli.mjs workout-alternates",
-    "move-workout": "node src/cli.mjs move-workout",
-    "replace-workout": "node src/cli.mjs replace-workout",
-    "switch-workout": "node src/cli.mjs switch-workout",
-    "logout": "node src/cli.mjs logout",
-    "workout-image": "node src/cli.mjs workout-image",
-    "add-annotation": "node src/cli.mjs add-annotation",
-    "remove-annotation": "node src/cli.mjs remove-annotation",
-    "annotation-details": "node src/cli.mjs annotation-details"
+    "dev": "node src/bin.ts",
+    "cli": "node src/bin.ts",
+    "build": "tsdown",
+    "prepare": "effect-tsgo patch --oxlint",
+    "fmt": "biome format --write .",
+    "lint": "oxlint --type-aware --deny-warnings",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "vitest run && node --test tests/*.test.mjs",
+    "check": "biome format . && npm run lint && npm run typecheck && node scripts/guides.mjs --check && npm test",
+    "check:push": "npm run check && node scripts/pack-smoke.mjs"
   },
   "keywords": [
     "trainerroad",
@@ -59,13 +40,27 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.19"
   },
   "type": "module",
-  "dependencies": {
-    "playwright": "^1.58.2"
-  },
   "optionalDependencies": {
     "@resvg/resvg-js": "^2.6.2"
+  },
+  "overrides": {
+    "@effect/platform-node-shared": "4.0.0-beta.106"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2",
+    "@biomejs/biome": "2.5.7",
+    "@effect/platform-node": "4.0.0-beta.106",
+    "@effect/tsgo": "0.36.1",
+    "@types/node": "22.20.1",
+    "effect": "4.0.0-beta.106",
+    "execa": "10.0.1",
+    "oxlint": "1.77.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
   }
 }
