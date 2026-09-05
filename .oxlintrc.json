@@ -1,0 +1,301 @@
+{
+  "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
+  "options": {
+    "typeAware": true,
+    "denyWarnings": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "plugins": ["typescript", "oxc", "unicorn", "import", "vitest"],
+  "rules": {
+    "no-console": "error",
+    "vitest/no-disabled-tests": "error",
+    "vitest/no-focused-tests": "error",
+    "vitest/warn-todo": "error",
+    "vitest/valid-expect": [
+      "error",
+      {
+        "maxArgs": 2
+      }
+    ],
+    "vitest/valid-title": "off",
+    "vitest/no-conditional-expect": "off",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "Effect",
+        "property": "runPromise",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runPromiseExit",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runSync",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runSyncExit",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runFork",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runCallback",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runPromiseWith",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runPromiseExitWith",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runSyncWith",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runSyncExitWith",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runForkWith",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      },
+      {
+        "object": "Effect",
+        "property": "runCallbackWith",
+        "message": "Run effects only in src/bin.ts; compose them elsewhere."
+      }
+    ],
+    "typescript/consistent-return": "off",
+    "eslint/no-underscore-dangle": [
+      "error",
+      {
+        "allow": ["_tag"]
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["effect/Effect"],
+            "message": "Import { Effect } from 'effect' so runtime boundaries stay lintable."
+          },
+          {
+            "group": ["effect/unstable/cli/**"],
+            "message": "Use command contracts; only the adapter imports the parser."
+          },
+          {
+            "group": ["effect/Console"],
+            "message": "Use Progress; Console bypasses the output protocol."
+          }
+        ],
+        "paths": [
+          {
+            "name": "node:fs",
+            "message": "Use the FileSystem service so tests can swap the layer."
+          },
+          {
+            "name": "node:fs/promises",
+            "message": "Use the FileSystem service so tests can swap the layer."
+          },
+          {
+            "name": "node:process",
+            "message": "Only src/bin.ts (and the adapter's output shim) touch the process; commands get services."
+          },
+          {
+            "name": "effect/unstable/cli",
+            "message": "Only src/contract/adapter.ts may import the parser — commands are defined as contracts."
+          },
+          {
+            "name": "effect",
+            "importNames": ["Console"],
+            "message": "Console bypasses the output protocol. Narrate through the Progress service; only the Renderer writes stdout."
+          }
+        ]
+      }
+    ],
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "process",
+        "message": "Only src/bin.ts (and the adapter's output shim) touch the process; commands get services."
+      }
+    ],
+    "oxc/no-map-spread": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/bin.ts"],
+      "rules": {
+        "no-restricted-properties": "off",
+        "no-restricted-globals": "off",
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["effect/unstable/cli/**"],
+                "message": "bin.ts consumes kit-owned adapter types only."
+              }
+            ],
+            "paths": [
+              {
+                "name": "node:fs",
+                "message": "Use the FileSystem service so tests can swap the layer."
+              },
+              {
+                "name": "effect/unstable/cli",
+                "message": "bin.ts consumes kit-owned adapter types only."
+              }
+            ]
+          }
+        ],
+        "effecttsgo/async-function": "off",
+        "effecttsgo/strict-effect-provide": "off"
+      }
+    },
+    {
+      "files": ["src/contract/adapter.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["effect/Effect"],
+                "message": "Import { Effect } from 'effect' so runtime boundaries stay lintable."
+              }
+            ],
+            "paths": [
+              {
+                "name": "node:fs",
+                "message": "Use the FileSystem service so tests can swap the layer."
+              },
+              {
+                "name": "node:process",
+                "message": "Only src/bin.ts (and the adapter's output shim) touch the process."
+              }
+            ]
+          }
+        ],
+        "no-restricted-globals": "off"
+      }
+    },
+    {
+      "files": ["src/contract/adapter.ts", "src/contract/jsonschema.ts", "src/contract/surface.ts"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    },
+    {
+      "files": ["bin/**"],
+      "rules": {
+        "import/no-unassigned-import": "off"
+      }
+    },
+    {
+      "files": ["scripts/**", "test/**", ".claude/**", "*.config.ts", "tests/**"],
+      "rules": {
+        "no-restricted-properties": "off",
+        "no-console": "off",
+        "no-restricted-imports": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "no-restricted-globals": "off",
+        "effecttsgo/node-builtin-import": "off",
+        "effecttsgo/global-date": "off",
+        "effecttsgo/process-env": "off",
+        "effecttsgo/global-console": "off",
+        "effecttsgo/strict-effect-provide": "off",
+        "effecttsgo/async-function": "off",
+        "effecttsgo/unsafe-effect-type-assertion": "off",
+        "effecttsgo/any-unknown-in-error-context": "off"
+      }
+    },
+    {
+      "files": ["test/**", "tests/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "skipIf",
+            "message": "Tests must run in every supported environment."
+          },
+          {
+            "property": "runIf",
+            "message": "Tests must run in every supported environment."
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/operations/*.mjs",
+        "src/lib/*.mjs",
+        "src/trainerroad-client.mjs",
+        "src/services/*.mjs"
+      ],
+      "rules": {
+        "effecttsgo/async-function": "off",
+        "effecttsgo/global-date": "off",
+        "effecttsgo/global-fetch": "off",
+        "effecttsgo/node-builtin-import": "off",
+        "effecttsgo/process-env": "off",
+        "typescript/no-unnecessary-type-conversion": "off",
+        "unicorn/no-array-sort": "off",
+        "unicorn/consistent-function-scoping": "off",
+        "eslint/no-await-in-loop": "off",
+        "eslint/no-shadow": "off"
+      }
+    },
+    {
+      "files": ["src/trainerroad-client.mjs", "src/operations/workout-image.mjs"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/lib/timezone.mjs"],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
+    },
+    {
+      "files": ["src/trainerroad-client.mjs"],
+      "rules": {
+        "effecttsgo/extends-native-error": "off"
+      }
+    },
+    {
+      "files": ["src/operations/workout-tools.mjs", "scripts/recon.mjs"],
+      "rules": {
+        "effecttsgo/global-timers": "off",
+        "effecttsgo/new-promise": "off",
+        "eslint/no-await-in-loop": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist/**", "coverage/**", ".trainerroad/**", "trial/**"],
+  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"]
+}

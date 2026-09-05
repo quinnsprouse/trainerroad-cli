@@ -1,13 +1,13 @@
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const DATE_TIME_WITH_OFFSET_PATTERN = /(Z|[+\-]\d{2}:\d{2})$/i;
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const DATE_TIME_WITH_OFFSET_PATTERN = /(Z|[+-]\d{2}:\d{2})$/i
 
 function isFiniteDate(date) {
-  return date instanceof Date && Number.isFinite(date.getTime());
+  return date instanceof Date && Number.isFinite(date.getTime())
 }
 
 function pickPart(parts, type) {
-  const found = parts.find((part) => part.type === type);
-  return found ? found.value : null;
+  const found = parts.find((part) => part.type === type)
+  return found ? found.value : null
 }
 
 function toDateTimeParts(date, timeZone) {
@@ -21,8 +21,8 @@ function toDateTimeParts(date, timeZone) {
     second: "2-digit",
     hour12: false,
     timeZoneName: "shortOffset",
-  });
-  return formatter.formatToParts(date);
+  })
+  return formatter.formatToParts(date)
 }
 
 function toDateOnlyParts(date, timeZone) {
@@ -31,56 +31,58 @@ function toDateOnlyParts(date, timeZone) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
-  return formatter.formatToParts(date);
+  })
+  return formatter.formatToParts(date)
 }
 
 export function normalizeTimeZone(value = null, fallback = null) {
-  const fromArg = typeof value === "string" ? value.trim() : "";
-  const fromEnv = typeof process.env.TR_TIMEZONE === "string" ? process.env.TR_TIMEZONE.trim() : "";
-  const fromIntl = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const candidate = fromArg || fromEnv || fallback || fromIntl || "UTC";
+  const fromArg = typeof value === "string" ? value.trim() : ""
+  const fromEnv = typeof process.env.TR_TIMEZONE === "string" ? process.env.TR_TIMEZONE.trim() : ""
+  const fromIntl = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const candidate = fromArg || fromEnv || fallback || fromIntl || "UTC"
 
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: candidate });
-    return candidate;
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).resolvedOptions()
+    return candidate
   } catch {
-    throw new Error(`Invalid timezone "${candidate}". Use an IANA timezone like "America/New_York".`);
+    throw new Error(
+      `Invalid timezone "${candidate}". Use an IANA timezone like "America/New_York".`,
+    )
   }
 }
 
 export function parseApiDateTime(value, { assumeUtcForOffsetlessDateTime = true } = {}) {
-  if (value == null) return null;
+  if (value == null) return null
 
   if (value instanceof Date) {
-    return isFiniteDate(value) ? new Date(value.getTime()) : null;
+    return isFiniteDate(value) ? new Date(value.getTime()) : null
   }
 
   if (typeof value === "number") {
-    const parsed = new Date(value);
-    return isFiniteDate(parsed) ? parsed : null;
+    const parsed = new Date(value)
+    return isFiniteDate(parsed) ? parsed : null
   }
 
-  if (typeof value !== "string") return null;
-  const raw = value.trim();
-  if (!raw) return null;
+  if (typeof value !== "string") return null
+  const raw = value.trim()
+  if (!raw) return null
 
   if (DATE_ONLY_PATTERN.test(raw)) {
-    const parsedDateOnly = new Date(`${raw}T00:00:00Z`);
-    return isFiniteDate(parsedDateOnly) ? parsedDateOnly : null;
+    const parsedDateOnly = new Date(`${raw}T00:00:00Z`)
+    return isFiniteDate(parsedDateOnly) ? parsedDateOnly : null
   }
 
-  let normalized = raw;
+  let normalized = raw
   if (
     assumeUtcForOffsetlessDateTime &&
     /^\d{4}-\d{2}-\d{2}T/.test(raw) &&
     !DATE_TIME_WITH_OFFSET_PATTERN.test(raw)
   ) {
-    normalized = `${raw}Z`;
+    normalized = `${raw}Z`
   }
 
-  const parsed = new Date(normalized);
-  return isFiniteDate(parsed) ? parsed : null;
+  const parsed = new Date(normalized)
+  return isFiniteDate(parsed) ? parsed : null
 }
 
 export function toDateOnlyInTimeZone(
@@ -89,18 +91,18 @@ export function toDateOnlyInTimeZone(
   { assumeUtcForOffsetlessDateTime = true } = {},
 ) {
   if (typeof value === "string" && DATE_ONLY_PATTERN.test(value.trim())) {
-    return value.trim();
+    return value.trim()
   }
 
-  const parsed = parseApiDateTime(value, { assumeUtcForOffsetlessDateTime });
-  if (!parsed) return null;
+  const parsed = parseApiDateTime(value, { assumeUtcForOffsetlessDateTime })
+  if (!parsed) return null
 
-  const parts = toDateOnlyParts(parsed, normalizeTimeZone(timeZone));
-  const year = pickPart(parts, "year");
-  const month = pickPart(parts, "month");
-  const day = pickPart(parts, "day");
-  if (!year || !month || !day) return null;
-  return `${year}-${month}-${day}`;
+  const parts = toDateOnlyParts(parsed, normalizeTimeZone(timeZone))
+  const year = pickPart(parts, "year")
+  const month = pickPart(parts, "month")
+  const day = pickPart(parts, "day")
+  if (!year || !month || !day) return null
+  return `${year}-${month}-${day}`
 }
 
 export function formatDateTimeInTimeZone(
@@ -108,39 +110,39 @@ export function formatDateTimeInTimeZone(
   timeZone,
   { assumeUtcForOffsetlessDateTime = true } = {},
 ) {
-  const parsed = parseApiDateTime(value, { assumeUtcForOffsetlessDateTime });
-  if (!parsed) return null;
+  const parsed = parseApiDateTime(value, { assumeUtcForOffsetlessDateTime })
+  if (!parsed) return null
 
-  const parts = toDateTimeParts(parsed, normalizeTimeZone(timeZone));
-  const year = pickPart(parts, "year");
-  const month = pickPart(parts, "month");
-  const day = pickPart(parts, "day");
-  const hour = pickPart(parts, "hour");
-  const minute = pickPart(parts, "minute");
-  const second = pickPart(parts, "second");
-  const timeZoneName = pickPart(parts, "timeZoneName");
-  if (!year || !month || !day || !hour || !minute || !second) return null;
+  const parts = toDateTimeParts(parsed, normalizeTimeZone(timeZone))
+  const year = pickPart(parts, "year")
+  const month = pickPart(parts, "month")
+  const day = pickPart(parts, "day")
+  const hour = pickPart(parts, "hour")
+  const minute = pickPart(parts, "minute")
+  const second = pickPart(parts, "second")
+  const timeZoneName = pickPart(parts, "timeZoneName")
+  if (!year || !month || !day || !hour || !minute || !second) return null
 
-  const suffix = timeZoneName ? ` ${timeZoneName}` : "";
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${suffix}`;
+  const suffix = timeZoneName ? ` ${timeZoneName}` : ""
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${suffix}`
 }
 
 export function shiftDateOnly(dateOnly, days) {
-  const parsed = parseApiDateTime(dateOnly, { assumeUtcForOffsetlessDateTime: false });
-  if (!parsed) return null;
-  parsed.setUTCDate(parsed.getUTCDate() + Number(days));
-  return parsed.toISOString().slice(0, 10);
+  const parsed = parseApiDateTime(dateOnly, { assumeUtcForOffsetlessDateTime: false })
+  if (!parsed) return null
+  parsed.setUTCDate(parsed.getUTCDate() + Number(days))
+  return parsed.toISOString().slice(0, 10)
 }
 
 export function dateOnlyNowInTimeZone(timeZone) {
   return toDateOnlyInTimeZone(new Date(), normalizeTimeZone(timeZone), {
     assumeUtcForOffsetlessDateTime: false,
-  });
+  })
 }
 
 export function isoDateShiftInTimeZone(days, timeZone) {
-  const today = dateOnlyNowInTimeZone(timeZone);
-  return shiftDateOnly(today, days);
+  const today = dateOnlyNowInTimeZone(timeZone)
+  return shiftDateOnly(today, days)
 }
 
 export function summarizeActivityTimeWindow(
@@ -149,24 +151,24 @@ export function summarizeActivityTimeWindow(
   timeZone,
   { assumeUtcForOffsetlessDateTime = true } = {},
 ) {
-  const startDate = parseApiDateTime(started, { assumeUtcForOffsetlessDateTime });
-  if (!startDate) return null;
+  const startDate = parseApiDateTime(started, { assumeUtcForOffsetlessDateTime })
+  if (!startDate) return null
 
   const duration =
     durationInSeconds != null && Number.isFinite(Number(durationInSeconds))
       ? Number(durationInSeconds)
-      : null;
-  const endDate = duration != null ? new Date(startDate.getTime() + duration * 1000) : null;
-  const normalizedTimeZone = normalizeTimeZone(timeZone);
+      : null
+  const endDate = duration != null ? new Date(startDate.getTime() + duration * 1000) : null
+  const normalizedTimeZone = normalizeTimeZone(timeZone)
 
   const startedDateOnly = toDateOnlyInTimeZone(startDate, normalizedTimeZone, {
     assumeUtcForOffsetlessDateTime: false,
-  });
+  })
   const endedDateOnly = endDate
     ? toDateOnlyInTimeZone(endDate, normalizedTimeZone, {
-      assumeUtcForOffsetlessDateTime: false,
-    })
-    : null;
+        assumeUtcForOffsetlessDateTime: false,
+      })
+    : null
 
   return {
     startedAtUtc: startDate.toISOString(),
@@ -176,12 +178,12 @@ export function summarizeActivityTimeWindow(
     endedAtUtc: endDate ? endDate.toISOString() : null,
     endedAtLocal: endDate
       ? formatDateTimeInTimeZone(endDate, normalizedTimeZone, {
-        assumeUtcForOffsetlessDateTime: false,
-      })
+          assumeUtcForOffsetlessDateTime: false,
+        })
       : null,
     localDate: startedDateOnly,
     endLocalDate: endedDateOnly,
     crossesMidnightLocal:
       Boolean(startedDateOnly) && Boolean(endedDateOnly) && startedDateOnly !== endedDateOnly,
-  };
+  }
 }

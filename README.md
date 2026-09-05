@@ -1,200 +1,134 @@
 # Unofficial TrainerRoad CLI
 
-> Unofficial tool. Not affiliated with or endorsed by TrainerRoad.
+Read TrainerRoad training data and make confirmed calendar changes from a terminal or agent.
+This project is not affiliated with or endorsed by TrainerRoad.
 
-CLI to fetch TrainerRoad data for your account, including:
+Version 0.5 replaces the previous CLI with Lasso's command contracts, structured errors, confirmation plans, and offline guides.
+It is a breaking migration. Read [MIGRATION.md](MIGRATION.md) before updating scripts.
 
-- future workouts
-- past/completed workouts
-- today view
-- events and annotations
-- progression levels
-- plans and phases
-- FTP and FTP prediction
-- power ranking and power records
-- weight history
+## Run from source
 
-It can also perform a small set of verified calendar writes for planned workouts:
+Requires Node.js 22.19 or later.
 
-- search the workout library by zone/profile/search text/duration/level
-- fetch AI suggested workouts from TrainNow
-- recommend library workouts against target duration/level/TSS
-- fetch workout-library details by workout ID
-- add a library workout to a calendar date
-- copy an existing planned workout to another date
-- move a planned workout to a new date
-- list TrainerRoad alternate workout options
-- replace a workout with a specific alternate
-- switch a workout between inside and outside
-- remove a planned workout or event
-- add a race or event with discipline, priority, and a TSS or intensity estimate
-- add and remove calendar annotations: time off, illness, injury, notes
-- save a workout's power-profile chart as PNG or SVG
-
-## Agent-Friendly Behavior
-
-- Non-interactive by default. Inputs are flags or stdin, not prompts.
-- Progressive disclosure. Use `trainerroad-cli help <command>` or `trainerroad-cli discover`.
-- Command help includes concrete examples and flag descriptions.
-- Write commands support `--dry-run` previews.
-- Common retry cases are idempotent no-ops instead of duplicate calendar writes.
-- Every write returns `before`/`after` (or the created record) so the caller can verify without a second call.
-
-## How TrainerRoad Reacts To Calendar Changes
-
-TrainerRoad's Adaptive Training treats the calendar as input. Agents managing an athlete's plan should expect:
-
-- Removing or skipping a planned workout can cause TrainerRoad to rebuild the upcoming plan around the gap.
-- Adding a workout, or marking time off, illness, or injury, can likewise shift the surrounding planned workouts.
-- Planned workouts carry `recommendationReason`, `adaptationLocked`, and `adaptationAltered` fields that show whether TrainerRoad chose or altered them.
-- After any write, re-read `future --days 14 --details` before deciding the next step. Do not assume the calendar looks the way it did before the write.
-
-Write commands echo this in an `adaptiveTraining` field so it is visible in machine-readable output.
-
-## Reading The Athlete's Situation
-
-A useful order for an agent building a picture of how training is going:
-
-1. `whoami` for FTP, weight, and timezone.
-2. `plan --view current` for the plan, its phases, and the phase the athlete is in today.
-3. `past --days 28 --details` and `future --days 14 --details` for what happened and what is scheduled.
-4. `levels` for progression levels by zone, and `ftp-prediction` for where FTP is heading.
-5. `annotations --from <date>` for time off, illness, and injury, and `annotation-details --id` for the notes behind them.
-6. `events` for upcoming races.
-7. `workout-image --id <workout-id>` when a picture of a workout's intervals helps explain it.
-
-## Install
-
-### Run without install (npx)
-
-```bash
-npx --yes trainerroad-cli help
+```sh
+npm ci
+npm run build
+node bin/trainerroad-cli.mjs describe --json
 ```
 
-### Global install
+The package installs both `trainerroad-cli` and `trcli`. Both run the same binary.
+After installing this version, start with:
 
-```bash
-npm install -g trainerroad-cli
-trainerroad-cli help
+```sh
+trainerroad-cli --help
+trainerroad-cli describe --command future --json
+trainerroad-cli schema --json
 ```
 
-### Local project install
+The generated command inventory is the reference for flags, required inputs, output schemas, and error codes.
 
-```bash
-npm install trainerroad-cli
-npx trainerroad-cli help
-```
+## Authenticate
 
-### Local development (from source)
+Login writes a local session file, so it requires confirmation like other mutations.
+Set `TR_USERNAME` and `TR_PASSWORD` through your secret manager, then run:
 
-```bash
-git clone https://github.com/quinnsprouse/trainerroad-cli.git
-cd trainerroad-cli
-npm install
-npm run help
-```
-
-## Quickstart
-
-1. Authenticate
-
-```bash
-trainerroad-cli login --username <username> --password-stdin
-```
-
-2. Query data
-
-```bash
+```sh
+trainerroad-cli login --yes --json
 trainerroad-cli whoami --json
-trainerroad-cli today --json
-trainerroad-cli future --days 30 --json
-trainerroad-cli past --days 30 --json
+```
+
+Alternatively, provide `--username` and pipe one password line to `login --password-stdin --yes`.
+Do not put a password in argv. Login previews never read the password.
+
+Sessions default to `.trainerroad/session.json` in the working directory.
+`--session-file` overrides `TR_SESSION_FILE`. Keep that path consistent across commands.
+Session files contain credentials. Do not print or commit them.
+`logout` removes the selected local file after confirmation. It does not revoke other sessions.
+
+## Read training data
+
+```sh
 trainerroad-cli plan --view current --json
-trainerroad-cli levels --json
-trainerroad-cli ftp --json
-trainerroad-cli today --tz America/New_York --json
-trainerroad-cli train-now --duration 60 --json
-trainerroad-cli workout-library --zone "Endurance" --profile "Sustained Power" --min-duration 45 --max-duration 75 --json
-trainerroad-cli workout-recommend --zone "Endurance" --profile "Sustained Power" --target-duration 60 --target-level 1.0 --count 3 --json
-trainerroad-cli workout-details --id 18128 --include-chart --json
-trainerroad-cli add-workout --workout-id 18128 --date 2026-03-16 --json
-trainerroad-cli add-workout --workout-id 18128 --date 2026-03-16 --dry-run
-trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
-```
-
-3. Mutate planned workouts
-
-First get a planned workout ID from `future --details`:
-
-```bash
+trainerroad-cli past --days 28 --details --json
 trainerroad-cli future --days 14 --details --json
+trainerroad-cli levels --json
+trainerroad-cli events --json
+trainerroad-cli annotations --json
+trainerroad-cli workout-library --search endurance --limit 10 --json
 ```
 
-Then use that planned activity ID:
+Other commands cover FTP, AI FTP status, power records, weight history, TrainNow suggestions, workout recommendations, and detailed records.
+Public-profile reads remain available on commands that declare `--target` and `--public`.
 
-```bash
-trainerroad-cli workout-alternates --id <planned-activity-id> --category easier --json
-trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --dry-run
-trainerroad-cli move-workout --id <planned-activity-id> --to 2026-03-13 --json
-trainerroad-cli replace-workout --id <planned-activity-id> --alternate-id <workout-id> --json
-trainerroad-cli switch-workout --id <planned-activity-id> --mode outside --json
-trainerroad-cli copy-workout --id <planned-activity-id> --date 2026-03-16 --json
-trainerroad-cli remove-workout --id <planned-activity-id> --dry-run
+Dates use `YYYY-MM-DD`. Date bounds are inclusive.
+Relative windows use `--tz`, then `TR_TIMEZONE`, then the system timezone.
+Pass explicit bounds when a repeated read must use the same window.
+
+## Preview and apply a calendar change
+
+```sh
+trainerroad-cli guide get calendar-changes --json
+trainerroad-cli move-workout --id planned-123 --to 2026-09-12 --json
 ```
 
-`copy-workout` is the reliable way to place an existing planned workout on another date.
-`add-workout` exists, but TrainerRoad's add endpoints are still inconsistent and may fail even after retry/reconciliation.
+The second command returns `confirmation_required`, a plan, and `confirmation.confirmArgs`, then exits with code 4 without writing.
+Inspect the account and change in the plan. Invoke this binary with the returned argv to confirm it.
 
-4. Events, annotations, and images
+`--dry-run` returns a plan with exit code 0. `--yes` applies after validation without a separate confirmation.
+Use `--yes` only for an authorized change.
+Calendar operations include add, copy, move, replace, switch, and remove workouts, plus event and annotation changes.
 
-```bash
-trainerroad-cli add-event --name "Black Fork" --date 2027-05-01 --discipline gravel --priority A --duration 300 --tss 340 --dry-run
-trainerroad-cli add-event --name "Tuesday crit" --date 2026-10-06 --discipline criterium --priority C --duration 60 --intensity 9 --json
-trainerroad-cli remove-workout --id <planned-activity-id> --json   # events and workouts share this
-trainerroad-cli add-annotation --type time-off --date 2026-09-21 --days 3 --title "Travel" --dry-run
-trainerroad-cli add-annotation --type illness --date 2026-09-21 --end-date 2026-09-23 --notes "Head cold" --json
-trainerroad-cli annotation-details --id <annotation-id> --json
-trainerroad-cli remove-annotation --id <annotation-id> --json
-trainerroad-cli workout-image --id 1592808 --file fishers.png
-trainerroad-cli workout-image --id 1592808 --format svg --file fishers.svg
+TrainerRoad can adapt nearby workouts after calendar changes. Follow the returned `next` action to inspect the calendar.
+Confirmation checks cannot prevent another client from changing state between the last read and the write.
+If a write fails or is interrupted, read the calendar before retrying.
+
+## Run agent workflows
+
+Additional browser-derived commands cover planned-activity state, annotation edits,
+calendar weeks, single-event edits, plan naming, workout surveys, device delivery,
+and recurrence and training-approach discovery. Discover the
+commands available in this build with `describe --json`. These commands are marked
+`experimental`: their API contracts were recovered from TrainerRoad's public
+JavaScript and tested with fixtures, not exercised against a live account.
+
+Each workflow has named inputs, a preview tied to the account and current records,
+and a read-only verification step. The new mutation results use `submitted: true`
+and `verification: "required"`. Acknowledgement does not prove that adaptation or
+device delivery finished. Follow `next`, inspect the result, and never poll by
+repeating a write. A disconnected provider or missing API field is a reason to
+stop, not guess another endpoint.
+
+Read the relevant topic from `guide list`. Guides explain which IDs to use,
+which answers must come from the user, and where a task still requires the
+TrainerRoad app. [Workflow coverage](docs/workflow-coverage.md) lists the boundaries.
+
+## Export a chart
+
+```sh
+trainerroad-cli workout-image --id 18128 --file workout.svg --dry-run --json
 ```
 
-PNG output uses the optional `@resvg/resvg-js` package. If it is not installed, use `--format svg`.
+Chart exports are file mutations. Confirm the plan to create the file.
+Use `--image-format png` for PNG, which requires the optional `@resvg/resvg-js` dependency.
+Exports never overwrite an existing file.
 
-5. Discover all commands
+## Machine output
 
-```bash
-trainerroad-cli help
-trainerroad-cli help future --json
-trainerroad-cli discover --level 3 --json
-```
+Non-terminal stdout defaults to JSON. Use `--json`, `--format ndjson`, or `--format text` explicitly.
+`TRAINERROAD_FORMAT` supplies the default when no format flag is present.
 
-## Modes
+Every terminal response carries `next` and `guides`. JSON envelopes also carry `schemaVersion`.
+Errors include `code`, `message`, `fix`, and `transient`.
+Collection commands return `data.items`; `--fields id,date` selects declared columns.
+Each unprojected item includes `source` with the retained TrainerRoad record.
+NDJSON emits items followed by one terminal event. Progress and warnings are not terminal results.
 
-- `private` (authenticated): full account data
-- `public` (username-based): limited day-level data
+Use `guide list` and `guide get <topic>` for version-matched task context without network access.
+The packaged [agent skill](skills/trainerroad-cli/SKILL.md) routes agents to those commands.
 
-Use `--target <username>` and/or `--public` for public mode queries.
+## Develop
 
-## Output
-
-- default: pretty JSON
-- `--json`: structured JSON
-- `--jsonl`: one record per line
-- `--fields a,b,c`: project record fields
-- `--records-only`: lighter record payloads
-- `--tz <IANA timezone>`: localize day boundaries/timestamps (defaults to `TR_TIMEZONE` or system timezone)
-
-## Help
-
-```bash
-trainerroad-cli help
-trainerroad-cli help future
-trainerroad-cli future --help
-trainerroad-cli help move-workout --json
-```
-
-## Security
-
-- Session cookies are stored in `.trainerroad/session.json`.
-- Treat this file as sensitive and do not commit it.
+Read [AGENTS.md](AGENTS.md) for boundaries and verification.
+`npm run check:push` runs offline tests and the package smoke test.
+[API notes](docs/api-notes.md) record the TrainerRoad behavior that the retained client implements.
+The contract runtime comes from Lasso and retains its [MIT notice](LASSO-LICENSE).
