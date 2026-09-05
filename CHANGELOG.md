@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0 - Unreleased
+## 0.5.0 - 2026-09-05
 
 - Extended standalone event edits with dates, local start times, cycling disciplines, and race priorities. A-priority changes check TrainerRoad's race-spacing result; verification preserves both affected dates.
 - Added recurrence and training-approach discovery, weight-record inspection, and confirmed FTP breakthrough dismissal. Dismissal records that a prompt was viewed without changing FTP. The package includes the workflow coverage reference.
